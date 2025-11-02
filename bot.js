@@ -1,4 +1,4 @@
-// bot.js — ОСТАЁТСЯ КАК ЕСТЬ
+// bot.js — ИСПРАВЛЕННАЯ ВЕРСИЯ
 const WebSocketManager = require('./websocketManager');
 const OrderManager = require('./orderManager');
 const config = require('./config');
@@ -9,6 +9,7 @@ class TradingBot extends EventEmitter {
     super();
     this.wsManager = new WebSocketManager();
     this.opened = new Set();
+    this.latestPrice = null; // Храним последнюю цену
   }
 
   async start() {
@@ -20,13 +21,16 @@ class TradingBot extends EventEmitter {
     this.wsManager.startMonitoring();
     this.wsManager.on('priceUpdate', this.handlePriceUpdate.bind(this));
 
-    console.log('Бот запущен');
+    console.log('Бот запущен — ждём цену...');
   }
 
   async handlePriceUpdate({ symbol, price }) {
+    this.latestPrice = price;
+
     if (this.opened.has(symbol)) return;
 
-    console.log(`\n[${symbol}] Открываем хедж по цене ${price}`);
+    console.log(`\n[СИГНАЛ] Открываем хедж по текущей цене: ${price}`);
+    
     await Promise.all([
       OrderManager.openPosition(symbol, 'BUY', config.positionSize, price),
       OrderManager.openPosition(symbol, 'SELL', config.positionSize, price),

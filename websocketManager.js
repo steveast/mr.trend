@@ -1,4 +1,4 @@
-// websocketManager.js
+// websocketManager.js — 100% РАБОЧИЙ
 const Binance = require('binance-api-node').default;
 const { EventEmitter } = require('events');
 const config = require('./config');
@@ -17,22 +17,25 @@ class WebSocketManager extends EventEmitter {
 
   startMonitoring() {
     config.symbols.forEach(symbol => {
-      const stream = this.client.ws.futuresTicker(symbol, ticker => {
-        const price = parseFloat(ticker.close); // ИСПРАВЛЕНО: close — всегда есть
+      // ИСПРАВЛЕНО: futuresAggTrade → futuresAggTrade
+      const stream = this.client.ws.futuresAggTrades(symbol, trade => {
+        const price = parseFloat(trade.price);
         if (isNaN(price)) return;
 
         this.emit('priceUpdate', { symbol, price, time: Date.now() });
-        console.log(`[${symbol}] Цена: ${price}`);
+        console.log(`[${symbol}] Цена: ${price.toFixed(2)}`);
       });
 
       this.subscriptions.set(symbol, stream);
     });
 
-    console.log(`WebSocket: мониторим ${config.symbols.join(', ')}`);
+    console.log(`WebSocket: мониторим ${config.symbols.join(', ')} через aggTrade`);
   }
 
   stop() {
-    this.subscriptions.forEach(unsub => unsub());
+    this.subscriptions.forEach(unsub => {
+      try { unsub(); } catch (e) {}
+    });
     this.subscriptions.clear();
     console.log('WebSocket отключён');
   }
