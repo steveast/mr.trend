@@ -1,0 +1,25 @@
+{
+  "name": "mr.trend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/steveast/mr.trend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/steveast/mr.trend/issues"
+  },
+  "homepage": "https://github.com/steveast/mr.trend#readme",
+  "dependencies": {
+    "binance-api-node": "^0.13.1",
+    "dotenv": "^17.2.3",
+    "events": "^3.3.0"
+  }
+}
