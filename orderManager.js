@@ -7,23 +7,19 @@ const BASE_URL = config.testnet
   : 'https://fapi.binance.com';
 
 const signedRequest = async (method, endpoint, params = {}) => {
-  const url = `${BASE_URL}${endpoint}`;
-  const queryParams = { ...params, timestamp: Date.now() };
-  const queryString = new URLSearchParams(queryParams).toString();
-  const signature = crypto
+  const url = `${config.testnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com'}${endpoint}`;
+  const query = new URLSearchParams({ ...params, timestamp: Date.now() }).toString();
+  const signature = require('crypto')
     .createHmac('sha256', config.apiSecret)
-    .update(queryString)
+    .update(query)
     .digest('hex');
 
-  const fullUrl = `${url}?${queryString}&signature=${signature}`;
+  const fullUrl = `${url}?${query}&signature=${signature}`;
   const headers = { 'X-MBX-APIKEY': config.apiKey };
 
   const response = await fetch(fullUrl, { method, headers });
   const data = await response.json();
-
-  if (data.code && data.code !== 200) {
-    throw new Error(`${data.code}: ${data.msg}`);
-  }
+  if (data.code) throw new Error(`${data.code}: ${data.msg}`);
   return data;
 };
 
@@ -115,6 +111,86 @@ class OrderManager {
       console.log(`TP ${positionSide}: ${tpPrice.toFixed(2)}`);
     } catch (err) {
       console.error(`Ошибка TP ${positionSide}:`, err.message);
+    }
+  }
+
+  // orderManager.js — ИСПРАВЛЕНО
+  static async createGridTakeProfits(symbol, side, quantity, entryPrice, stopPrice) {
+    const distance = Math.abs(entryPrice - stopPrice);
+    const step = distance * 0.1;
+
+    const isLong = side === 'BUY';
+    const tpSide = isLong ? 'SELL' : 'BUY';
+    const startPrice = isLong ? stopPrice : stopPrice;
+
+    for (let i = 1; i <= 10; i++) {
+      const tpPrice = isLong 
+        ? startPrice + (step * i)
+        : startPrice - (step * i);
+
+      const reduceOnly = i === 10; // ТОЛЬКО НА ПОСЛЕДНЕМ
+
+      try {
+        await signedRequest('POST', '/fapi/v1/order', {
+          symbol,
+          side: tpSide,
+          type: 'LIMIT',
+          quantity: quantity.toFixed(6),
+          price: tpPrice.toFixed(2),
+          timeInForce: 'GTC',
+          reduceOnly, // ТОЛЬКО НА TP10
+          positionSide: isLong ? 'LONG' : 'SHORT',
+        });
+        console.log(`TP${i} ${isLong ? 'LONG' : 'SHORT'}: ${tpPrice.toFixed(2)}${reduceOnly ? ' (close)' : ''}`);
+      } catch (err) {
+        console.error(`Ошибка TP${i}:`, err.message);
+      }
+    }
+  }
+
+  // В orderManager.js — добавь эти методы
+
+  static async openPositionWithSL(symbol, side, quantity, entryPrice, stopPrice) {
+    const positionSide = side === 'BUY' ? 'LONG' : 'SHORT';
+    try {
+      await signedRequest('POST', '/fapi/v1/order', {
+        symbol,
+        side,
+        type: 'MARKET',
+        quantity: quantity.toFixed(6),
+        positionSide,
+      });
+      console.log(`Открыто: ${positionSide} @ ${entryPrice.toFixed(2)} | SL: ${stopPrice.toFixed(2)}`);
+
+      // Устанавливаем SL
+      await signedRequest('POST', '/fapi/v1/order', {
+        symbol,
+        side: side === 'BUY' ? 'SELL' : 'BUY',
+        type: 'STOP_MARKET',
+        quantity: quantity.toFixed(6),
+        stopPrice: stopPrice.toFixed(2),
+        positionSide,
+        closePosition: false,
+      });
+    } catch (err) {
+      console.error(`Ошибка ${positionSide}:`, err.message);
+    }
+  }
+
+  static async moveSLToBreakeven(symbol, positionSide, breakevenPrice) {
+    try {
+      await signedRequest('POST', '/fapi/v1/order', {
+        symbol,
+        side: positionSide === 'LONG' ? 'SELL' : 'BUY',
+        type: 'STOP_MARKET',
+        quantity: config.positionSize.toFixed(6),
+        stopPrice: breakevenPrice.toFixed(2),
+        positionSide,
+        closePosition: false,
+      });
+      console.log(`SL ${positionSide} → безубыток: ${breakevenPrice.toFixed(2)}`);
+    } catch (err) {
+      console.error(`Ошибка безубытка:`, err.message);
     }
   }
 }

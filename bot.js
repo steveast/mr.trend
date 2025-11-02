@@ -1,15 +1,18 @@
-// bot.js — ИСПРАВЛЕННАЯ ВЕРСИЯ
+// bot.js — ТЕЙКИ СРАЗУ ПОСЛЕ ВХОДА
 const WebSocketManager = require('./websocketManager');
 const OrderManager = require('./orderManager');
 const config = require('./config');
-const { EventEmitter } = require('events');
 
-class TradingBot extends EventEmitter {
+class TradingBot {
   constructor() {
-    super();
     this.wsManager = new WebSocketManager();
-    this.opened = new Set();
-    this.latestPrice = null; // Храним последнюю цену
+    this.active = false;
+    this.entryPrice = null;
+    this.longSL = null;
+    this.shortSL = null;
+    this.symbol = config.symbols[0];
+    this.gridCreated = { LONG: false, SHORT: false };
+    this.firstTPTaken = { LONG: false, SHORT: false };
   }
 
   async start() {
@@ -19,29 +22,71 @@ class TradingBot extends EventEmitter {
     }
 
     this.wsManager.startMonitoring();
-    this.wsManager.on('priceUpdate', this.handlePriceUpdate.bind(this));
+    this.wsManager.on('priceUpdate', this.handlePrice.bind(this));
 
-    console.log('Бот запущен — ждём цену...');
+    this.wsManager.once('priceUpdate', async ({ price }) => {
+      this.entryPrice = price;
+      console.log(`\n[ВХОД] Хедж по цене: ${price.toFixed(2)}`);
+
+      const qty = config.positionSize;
+      this.longSL = price * 0.98;
+      this.shortSL = price * 1.02;
+
+      // ОТКРЫВАЕМ ПОЗИЦИИ + СРАЗУ ТЕЙКИ
+      await Promise.all([
+        this.openWithGrid('BUY', qty, price, this.longSL, 'LONG'),
+        this.openWithGrid('SELL', qty, price, this.shortSL, 'SHORT'),
+      ]);
+      this.wsManager.on('orderFilled', this.handleOrderFilled.bind(this));
+
+      this.active = true;
+    });
+
+    console.log('Бот запущен — тейки выставляются СРАЗУ');
   }
 
-  async handlePriceUpdate({ symbol, price }) {
-    this.latestPrice = price;
+  async openWithGrid(side, qty, entry, stop, positionSide) {
+    await OrderManager.openPositionWithSL(this.symbol, side, qty, entry, stop);
+    await OrderManager.createGridTakeProfits(this.symbol, side, qty, entry, stop);
+    this.gridCreated[positionSide] = true;
+    console.log(`Грид ${positionSide} создан сразу после входа`);
+  }
 
-    if (this.opened.has(symbol)) return;
+  async handlePrice({ symbol, price }) {
+    if (!this.active || symbol !== this.symbol) return;
 
-    console.log(`\n[СИГНАЛ] Открываем хедж по текущей цене: ${price}`);
-    
-    await Promise.all([
-      OrderManager.openPosition(symbol, 'BUY', config.positionSize, price),
-      OrderManager.openPosition(symbol, 'SELL', config.positionSize, price),
-    ]);
+    // СРАБАТЫВАНИЕ СТОПА
+    if (price <= this.longSL && !this.gridCreated.SHORT) {
+      console.log(`\n[STOP] LONG сработал — SHORT уже с гридом`);
+      await OrderManager.moveSLToBreakeven(this.symbol, 'SHORT', this.entryPrice);
+      this.active = false;
+    }
 
-    this.opened.add(symbol);
+    if (price >= this.shortSL && !this.gridCreated.LONG) {
+      console.log(`\n[STOP] SHORT сработал — LONG уже с гридом`);
+      await OrderManager.moveSLToBreakeven(this.symbol, 'LONG', this.entryPrice);
+      this.active = false;
+    }
   }
 
   async stop() {
     this.wsManager.stop();
     console.log('Бот остановлен');
+  }
+
+  async handleOrderFilled({ symbol, side, positionSide, price, qty }) {
+    if (!this.active || symbol !== this.symbol) return;
+
+    const isLongTP = positionSide === 'LONG' && side === 'SELL';
+    const isShortTP = positionSide === 'SHORT' && side === 'BUY';
+
+    if ((isLongTP || isShortTP) && !this.firstTPTaken[positionSide]) {
+      console.log(`\n[TP1] Первый тейк ${positionSide} по ${price.toFixed(2)} → SL в безубыток!`);
+      this.firstTPTaken[positionSide] = true;
+
+      const oppositeSide = positionSide === 'LONG' ? 'SHORT' : 'LONG';
+      await OrderManager.moveSLToBreakeven(this.symbol, oppositeSide, this.entryPrice);
+    }
   }
 }
 

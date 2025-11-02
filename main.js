@@ -1,22 +1,21 @@
-const config = require('./config');
+// main.js — ИСПРАВЛЕННЫЙ
 const TradingBot = require('./bot');
 
 async function main() {
-  const bot = new TradingBot(config.symbols);  // Масштаб: все символы из конфига
+  const bot = new TradingBot();
 
-  bot.on('error', err => {
-    console.error('Bot Error:', err);
-    process.exit(1);
+  // БОЛЬШЕ НЕ НУЖНО: bot.on('error', ...) — нет событий
+
+  process.on('SIGINT', async () => {
+    console.log('\nОстановка...');
+    await bot.stop();
+    process.exit(0);
   });
 
   await bot.start();
-
-  // Graceful shutdown
-  process.on('SIGINT', () => {
-    console.log('\nЗавершение...');
-    bot.stop();
-    process.exit(0);
-  });
 }
 
-main().catch(console.error);
+main().catch(err => {
+  console.error('Критическая ошибка:', err);
+  process.exit(1);
+});
