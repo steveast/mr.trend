@@ -24,7 +24,12 @@ class TradingBot {
     this.wsManager.on('priceUpdate', this.handlePrice.bind(this));
     this.wsManager.on('orderFilled', this.handleOrderFilled.bind(this));
 
-    this.wsManager.once('priceUpdate', async ({ price }) => {
+    // === ЗАПУСК ПО ПЕРВОЙ ЦЕНЕ (on + флаг) ===
+    let entryTriggered = false;
+    this.wsManager.on('priceUpdate', async ({ price }) => {
+      if (entryTriggered) return;
+      entryTriggered = true;
+
       this.entryPrice = price;
       console.log(`\n[ВХОД] Хедж по цене: ${price.toFixed(2)}`);
 
@@ -32,43 +37,32 @@ class TradingBot {
       this.longSL = price * 0.98;
       this.shortSL = price * 1.02;
 
-      try {
-        // 1. ПОЛУЧАЕМ ТЕКУЩУЮ ЦЕНУ
-        const currentPrice = await OrderManager.getCurrentPrice(this.symbol);
-        if (!currentPrice) {
-          console.error('Не удалось получить текущую цену');
-          return;
-        }
+      // ОТКРЫТИЕ ПОЗИЦИЙ
+      await Promise.all([
+        OrderManager.openMarketPosition(this.symbol, 'BUY', qty, 'LONG'),
+        OrderManager.openMarketPosition(this.symbol, 'SELL', qty, 'SHORT'),
+      ]);
+      console.log('Обе позиции отправлены на открытие');
 
-        await Promise.all([
-          OrderManager.openMarketPosition(this.symbol, 'BUY', qty, 'LONG'),
-          OrderManager.openMarketPosition(this.symbol, 'SELL', qty, 'SHORT'),
-        ]);
+      // ЖДЁМ
+      await new Promise(r => setTimeout(r, 2000));
 
-        // 4. ЖДЁМ 1 СЕКУНДУ
-        await new Promise(r => setTimeout(r, 1000));
+      // СТОПЫ
+      await Promise.all([
+        OrderManager.placeStopLoss(this.symbol, 'BUY', qty, this.longSL, 'LONG'),
+        OrderManager.placeStopLoss(this.symbol, 'SELL', qty, this.shortSL, 'SHORT'),
+      ]);
+      console.log('Стопы выставлены');
 
-        // 5. СТАВИМ СТОПЫ
-        await Promise.all([
-          OrderManager.placeStopLoss(this.symbol, 'BUY', qty, this.longSL, 'LONG'),
-          OrderManager.placeStopLoss(this.symbol, 'SELL', qty, this.shortSL, 'SHORT'),
-        ]);
-        console.log('Стопы выставлены');
+      // ЖДЁМ
+      await new Promise(r => setTimeout(r, 1000));
 
-        // 6. ЖДЁМ 1 СЕКУНДУ
-        await new Promise(r => setTimeout(r, 1000));
-
-        // 7. СТАВИМ ТЕЙКИ
-        await Promise.all([
-          OrderManager.placeTakeProfits(this.symbol, 'BUY', qty, currentPrice, this.longSL, 'LONG'),
-          OrderManager.placeTakeProfits(this.symbol, 'SELL', qty, currentPrice, this.shortSL, 'SHORT'),
-        ]);
-        console.log('Грид тейков выставлен (20 ордеров)');
-
-      } catch (err) {
-        console.error('Критическая ошибка при открытии:', err.message);
-        return;
-      }
+      // ТЕЙКИ
+      await Promise.all([
+        OrderManager.placeTakeProfits(this.symbol, 'BUY', qty, price, this.longSL, 'LONG'),
+        OrderManager.placeTakeProfits(this.symbol, 'SELL', qty, price, this.shortSL, 'SHORT'),
+      ]);
+      console.log('Грид тейков выставлен (20 ордеров)');
 
       this.active = true;
     });

@@ -10,58 +10,59 @@ const BASE_URL = config.testnet
   ? 'https://testnet.binancefuture.com' 
   : 'https://fapi.binance.com';
 
-const signedRequest = async (method, endpoint, params = {}) => {
-  const url = `${BASE_URL}${endpoint}`;
-  const queryParams = { ...params, timestamp: Date.now() };
-  const queryString = new URLSearchParams(queryParams).toString();
-  const signature = crypto
-    .createHmac('sha256', config.apiSecret)
-    .update(queryString)
-    .digest('hex');
-
-  const fullUrl = `${url}?${queryString}&signature=${signature}`;
-  const headers = { 'X-MBX-APIKEY': config.apiKey };
-
-  const response = await fetch(fullUrl, { method, headers });
-  const data = await response.json();
-
-  if (data.code) {
-    throw new Error(`${data.code}: ${data.msg}`);
-  }
-  return data;
-};
-
-const TICK_SIZE = {};
-
-async function initTickSize() {
-  try {
-    const data = await signedRequest('GET', '/fapi/v1/exchangeInfo');
-    data.symbols.forEach(s => {
-      if (config.symbols.includes(s.symbol)) {
-        s.filters.forEach(f => {
-          if (f.filterType === 'PRICE_FILTER') {
-            TICK_SIZE[s.symbol] = parseFloat(f.tickSize);
-          }
-        });
-      }
-    });
-    console.log('TickSize загружен:', TICK_SIZE);
-  } catch (err) {
-    console.error('Ошибка загрузки tickSize:', err.message);
-  }
-}
-
-initTickSize();
-
-function roundToTick(price, symbol = 'BTCUSDT') {
-  const tick = TICK_SIZE[symbol] || 0.1;
-  return Math.round(price / tick) * tick;
-}
-
 class OrderManager {
+  // === ПОДПИСАННЫЙ ЗАПРОС — В КЛАССЕ ===
+  static async signedRequest(method, endpoint, params = {}) {
+    const url = `${BASE_URL}${endpoint}`;
+    const queryParams = { ...params, timestamp: Date.now() };
+    const queryString = new URLSearchParams(queryParams).toString();
+    const signature = crypto
+      .createHmac('sha256', config.apiSecret)
+      .update(queryString)
+      .digest('hex');
+
+    const fullUrl = `${url}?${queryString}&signature=${signature}`;
+    const headers = { 'X-MBX-APIKEY': config.apiKey };
+
+    const response = await fetch(fullUrl, { method, headers });
+    const data = await response.json();
+
+    if (data.code) {
+      throw new Error(`${data.code}: ${data.msg}`);
+    }
+    return data;
+  }
+
+  // === TICK SIZE ===
+  static TICK_SIZE = {};
+
+  static async initTickSize() {
+    try {
+      const data = await this.signedRequest('GET', '/fapi/v1/exchangeInfo');
+      data.symbols.forEach(s => {
+        if (config.symbols.includes(s.symbol)) {
+          s.filters.forEach(f => {
+            if (f.filterType === 'PRICE_FILTER') {
+              this.TICK_SIZE[s.symbol] = parseFloat(f.tickSize);
+            }
+          });
+        }
+      });
+      console.log('TickSize загружен:', this.TICK_SIZE);
+    } catch (err) {
+      console.error('Ошибка загрузки tickSize:', err.message);
+    }
+  }
+
+  static roundToTick(price, symbol = 'BTCUSDT') {
+    const tick = this.TICK_SIZE[symbol] || 0.1;
+    return Math.round(price / tick) * tick;
+  }
+
+  // === HEDGE MODE ===
   static async setHedgeMode() {
     try {
-      await signedRequest('POST', '/fapi/v1/positionSide/dual', { dualSidePosition: true });
+      await this.signedRequest('POST', '/fapi/v1/positionSide/dual', { dualSidePosition: true });
       console.log('Hedge mode включён');
     } catch (err) {
       if (err.message.includes('-4059')) {
@@ -72,9 +73,10 @@ class OrderManager {
     }
   }
 
+  // === LEVERAGE ===
   static async setLeverage(symbol) {
     try {
-      await signedRequest('POST', '/fapi/v1/leverage', {
+      await this.signedRequest('POST', '/fapi/v1/leverage', {
         symbol,
         leverage: config.leverage,
       });
@@ -84,27 +86,27 @@ class OrderManager {
     }
   }
 
-  // НОВАЯ ФУНКЦИЯ: ПОЛУЧИТЬ ТЕКУЩУЮ ЦЕНУ
+  // === ТЕКУЩАЯ ЦЕНА ===
   static async getCurrentPrice(symbol) {
     try {
-      const ticker = await signedRequest('GET', '/fapi/v1/ticker/price', { symbol });
+      const ticker = await this.signedRequest('GET', '/fapi/v1/ticker/price', { symbol });
       return parseFloat(ticker.price);
     } catch (err) {
       console.error('Ошибка получения цены:', err.message);
-      return 110000; // fallback
+      return 110000;
     }
   }
 
-  // ОТКРЫВАЕМ ПОЗИЦИЮ: LIMIT + IOC = MARKET + positionSide
+  // === ОТКРЫТИЕ ПОЗИЦИИ (LIMIT + IOC) ===
   static async openMarketPosition(symbol, side, quantity, positionSide) {
     try {
       const currentPrice = await this.getCurrentPrice(symbol);
-      const price = roundToTick(
+      const price = this.roundToTick(
         currentPrice * (side === 'BUY' ? 1.001 : 0.999),
         symbol
       );
 
-      const order = await signedRequest('POST', '/fapi/v1/order', {
+      const order = await this.signedRequest('POST', '/fapi/v1/order', {
         symbol,
         side,
         type: 'LIMIT',
@@ -121,12 +123,12 @@ class OrderManager {
     }
   }
 
-  // СТАВИМ СТОПЫ
+  // === СТОПЫ ===
   static async placeStopLoss(symbol, side, quantity, stopPrice, positionSide) {
     const tpSide = side === 'BUY' ? 'SELL' : 'BUY';
-    const roundedStop = roundToTick(stopPrice, symbol);
+    const roundedStop = this.roundToTick(stopPrice, symbol);
     try {
-      await signedRequest('POST', '/fapi/v1/order', {
+      await this.signedRequest('POST', '/fapi/v1/order', {
         symbol,
         side: tpSide,
         type: 'STOP_MARKET',
@@ -140,18 +142,18 @@ class OrderManager {
     }
   }
 
-  // СТАВИМ 10 ТЕЙКОВ
+  // === ТЕЙКИ ОТ СТОПА ===
   static async placeTakeProfits(symbol, side, quantity, entryPrice, stopPrice, positionSide) {
-    const isLong = side === 'BUY';
+    const isLong = positionSide === 'LONG';
     const tpSide = isLong ? 'SELL' : 'BUY';
     const distance = Math.abs(entryPrice - stopPrice);
     const step = distance * 0.1;
 
     for (let i = 1; i <= 10; i++) {
-      const tpPrice = roundToTick(
+      const tpPrice = this.roundToTick(
         isLong 
-          ? entryPrice - (step * i)
-          : entryPrice + (step * i),
+          ? stopPrice + (step * i)
+          : stopPrice - (step * i),
         symbol
       );
 
@@ -166,11 +168,11 @@ class OrderManager {
       };
 
       if (i === 10) {
-        params.reduceOnly = true;
+        //params.reduceOnly = true;
       }
 
       try {
-        await signedRequest('POST', '/fapi/v1/order', params);
+        await this.signedRequest('POST', '/fapi/v1/order', params);
         console.log(`TP${i} ${isLong ? 'LONG' : 'SHORT'}: ${tpPrice.toFixed(2)}${i===10 ? ' (close)' : ''}`);
       } catch (err) {
         console.error(`Ошибка TP${i} ${positionSide}:`, err.message);
@@ -178,20 +180,21 @@ class OrderManager {
     }
   }
 
+  // === БЕЗУБЫТОК ===
   static async moveSLToBreakeven(symbol, positionSide, entryPrice) {
     const side = positionSide === 'LONG' ? 'SELL' : 'BUY';
-    const stopPrice = roundToTick(entryPrice, symbol);
+    const stopPrice = this.roundToTick(entryPrice, symbol);
 
     try {
-      await signedRequest('DELETE', '/fapi/v1/allOpenOrders', { symbol });
-      await signedRequest('POST', '/fapi/v1/order', {
+      await this.signedRequest('DELETE', '/fapi/v1/allOpenOrders', { symbol });
+      await this.signedRequest('POST', '/fapi/v1/order', {
         symbol,
         side,
         type: 'STOP_MARKET',
         quantity: config.positionSize.toFixed(6),
         stopPrice: stopPrice.toFixed(2),
         positionSide,
-        reduceOnly: true,
+        //reduceOnly: true,
       });
       console.log(`SL ${positionSide} → безубыток: ${stopPrice.toFixed(2)}`);
     } catch (err) {
@@ -199,5 +202,8 @@ class OrderManager {
     }
   }
 }
+
+// ИНИЦИАЛИЗАЦИЯ
+OrderManager.initTickSize();
 
 module.exports = OrderManager;
