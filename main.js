@@ -1,10 +1,8 @@
-// main.js — ИСПРАВЛЕННЫЙ
+// main.js
 const TradingBot = require('./bot');
 
 async function main() {
   const bot = new TradingBot();
-
-  // БОЛЬШЕ НЕ НУЖНО: bot.on('error', ...) — нет событий
 
   process.on('SIGINT', async () => {
     console.log('\nОстановка...');

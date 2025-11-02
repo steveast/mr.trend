@@ -2,26 +2,61 @@
 const config = require('./config');
 const crypto = require('crypto');
 
+if (!global.fetch) {
+  global.fetch = require('node-fetch');
+}
+
 const BASE_URL = config.testnet 
   ? 'https://testnet.binancefuture.com' 
   : 'https://fapi.binance.com';
 
 const signedRequest = async (method, endpoint, params = {}) => {
-  const url = `${config.testnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com'}${endpoint}`;
-  const query = new URLSearchParams({ ...params, timestamp: Date.now() }).toString();
-  const signature = require('crypto')
+  const url = `${BASE_URL}${endpoint}`;
+  const queryParams = { ...params, timestamp: Date.now() };
+  const queryString = new URLSearchParams(queryParams).toString();
+  const signature = crypto
     .createHmac('sha256', config.apiSecret)
-    .update(query)
+    .update(queryString)
     .digest('hex');
 
-  const fullUrl = `${url}?${query}&signature=${signature}`;
+  const fullUrl = `${url}?${queryString}&signature=${signature}`;
   const headers = { 'X-MBX-APIKEY': config.apiKey };
 
   const response = await fetch(fullUrl, { method, headers });
   const data = await response.json();
-  if (data.code) throw new Error(`${data.code}: ${data.msg}`);
+
+  if (data.code) {
+    throw new Error(`${data.code}: ${data.msg}`);
+  }
   return data;
 };
+
+const TICK_SIZE = {};
+
+async function initTickSize() {
+  try {
+    const data = await signedRequest('GET', '/fapi/v1/exchangeInfo');
+    data.symbols.forEach(s => {
+      if (config.symbols.includes(s.symbol)) {
+        s.filters.forEach(f => {
+          if (f.filterType === 'PRICE_FILTER') {
+            TICK_SIZE[s.symbol] = parseFloat(f.tickSize);
+          }
+        });
+      }
+    });
+    console.log('TickSize загружен:', TICK_SIZE);
+  } catch (err) {
+    console.error('Ошибка загрузки tickSize:', err.message);
+  }
+}
+
+initTickSize();
+
+function roundToTick(price, symbol = 'BTCUSDT') {
+  const tick = TICK_SIZE[symbol] || 0.1;
+  return Math.round(price / tick) * tick;
+}
 
 class OrderManager {
   static async setHedgeMode() {
@@ -29,7 +64,7 @@ class OrderManager {
       await signedRequest('POST', '/fapi/v1/positionSide/dual', { dualSidePosition: true });
       console.log('Hedge mode включён');
     } catch (err) {
-      if (err.message.includes('200') || err.message.includes('-4059')) {
+      if (err.message.includes('-4059')) {
         console.log('Hedge mode уже активен');
       } else {
         console.error('Ошибка hedge mode:', err.message);
@@ -49,146 +84,116 @@ class OrderManager {
     }
   }
 
-  static async openPosition(symbol, side, quantity, entryPrice) {
-    const positionSide = side === 'BUY' ? 'LONG' : 'SHORT';
-
+  // НОВАЯ ФУНКЦИЯ: ПОЛУЧИТЬ ТЕКУЩУЮ ЦЕНУ
+  static async getCurrentPrice(symbol) {
     try {
-      const order = await signedRequest('POST', '/fapi/v1/order', {
-        symbol,
-        side,
-        type: 'MARKET',
-        quantity: quantity.toFixed(6),
-        positionSide, // КЛЮЧЕВОЙ ПАРАМЕТР
-      });
-
-      console.log(`Открыто: ${positionSide} ${quantity} ${symbol} @ ${entryPrice.toFixed(2)}`);
-
-      await this.setStopLoss(symbol, side, quantity, entryPrice, positionSide);
-      await this.setTakeProfit(symbol, side, quantity, entryPrice, positionSide);
-
-      return order;
+      const ticker = await signedRequest('GET', '/fapi/v1/ticker/price', { symbol });
+      return parseFloat(ticker.price);
     } catch (err) {
-      console.error(`Ошибка ${positionSide} ${symbol}:`, err.message);
+      console.error('Ошибка получения цены:', err.message);
+      return 110000; // fallback
     }
   }
 
-  static async setStopLoss(symbol, side, quantity, entryPrice, positionSide) {
-    const slPrice = side === 'BUY'
-      ? entryPrice * (1 + config.stopLossPct / 100)
-      : entryPrice * (1 - config.stopLossPct / 100);
+  // ОТКРЫВАЕМ ПОЗИЦИЮ: LIMIT + IOC = MARKET + positionSide
+  static async openMarketPosition(symbol, side, quantity, positionSide) {
+    try {
+      const currentPrice = await this.getCurrentPrice(symbol);
+      const price = roundToTick(
+        currentPrice * (side === 'BUY' ? 1.001 : 0.999),
+        symbol
+      );
 
+      const order = await signedRequest('POST', '/fapi/v1/order', {
+        symbol,
+        side,
+        type: 'LIMIT',
+        quantity: quantity.toFixed(6),
+        price: price.toFixed(2),
+        timeInForce: 'IOC',
+        positionSide,
+      });
+      console.log(`Открыто: ${positionSide} @ ${price.toFixed(2)}`);
+      return order;
+    } catch (err) {
+      console.error(`Ошибка открытия ${positionSide}:`, err.message);
+      throw err;
+    }
+  }
+
+  // СТАВИМ СТОПЫ
+  static async placeStopLoss(symbol, side, quantity, stopPrice, positionSide) {
+    const tpSide = side === 'BUY' ? 'SELL' : 'BUY';
+    const roundedStop = roundToTick(stopPrice, symbol);
     try {
       await signedRequest('POST', '/fapi/v1/order', {
         symbol,
-        side: side === 'BUY' ? 'SELL' : 'BUY',
+        side: tpSide,
         type: 'STOP_MARKET',
         quantity: quantity.toFixed(6),
-        stopPrice: slPrice.toFixed(2),
+        stopPrice: roundedStop.toFixed(2),
         positionSide,
-        closePosition: false,
       });
-      console.log(`SL ${positionSide}: ${slPrice.toFixed(2)}`);
+      console.log(`SL ${positionSide}: ${roundedStop.toFixed(2)}`);
     } catch (err) {
       console.error(`Ошибка SL ${positionSide}:`, err.message);
     }
   }
 
-  static async setTakeProfit(symbol, side, quantity, entryPrice, positionSide) {
-    const tpPrice = side === 'BUY'
-      ? entryPrice * (1 + config.takeProfitPct / 100)
-      : entryPrice * (1 - config.takeProfitPct / 100);
-
-    try {
-      await signedRequest('POST', '/fapi/v1/order', {
-        symbol,
-        side: side === 'BUY' ? 'SELL' : 'BUY',
-        type: 'TAKE_PROFIT_MARKET',
-        quantity: quantity.toFixed(6),
-        stopPrice: tpPrice.toFixed(2),
-        positionSide,
-        closePosition: false,
-      });
-      console.log(`TP ${positionSide}: ${tpPrice.toFixed(2)}`);
-    } catch (err) {
-      console.error(`Ошибка TP ${positionSide}:`, err.message);
-    }
-  }
-
-  // orderManager.js — ИСПРАВЛЕНО
-  static async createGridTakeProfits(symbol, side, quantity, entryPrice, stopPrice) {
+  // СТАВИМ 10 ТЕЙКОВ
+  static async placeTakeProfits(symbol, side, quantity, entryPrice, stopPrice, positionSide) {
+    const isLong = side === 'BUY';
+    const tpSide = isLong ? 'SELL' : 'BUY';
     const distance = Math.abs(entryPrice - stopPrice);
     const step = distance * 0.1;
 
-    const isLong = side === 'BUY';
-    const tpSide = isLong ? 'SELL' : 'BUY';
-    const startPrice = isLong ? stopPrice : stopPrice;
-
     for (let i = 1; i <= 10; i++) {
-      const tpPrice = isLong 
-        ? startPrice + (step * i)
-        : startPrice - (step * i);
+      const tpPrice = roundToTick(
+        isLong 
+          ? entryPrice - (step * i)
+          : entryPrice + (step * i),
+        symbol
+      );
 
-      const reduceOnly = i === 10; // ТОЛЬКО НА ПОСЛЕДНЕМ
+      const params = {
+        symbol,
+        side: tpSide,
+        type: 'LIMIT',
+        quantity: quantity.toFixed(6),
+        price: tpPrice.toFixed(2),
+        timeInForce: 'GTC',
+        positionSide,
+      };
+
+      if (i === 10) {
+        params.reduceOnly = true;
+      }
 
       try {
-        await signedRequest('POST', '/fapi/v1/order', {
-          symbol,
-          side: tpSide,
-          type: 'LIMIT',
-          quantity: quantity.toFixed(6),
-          price: tpPrice.toFixed(2),
-          timeInForce: 'GTC',
-          reduceOnly, // ТОЛЬКО НА TP10
-          positionSide: isLong ? 'LONG' : 'SHORT',
-        });
-        console.log(`TP${i} ${isLong ? 'LONG' : 'SHORT'}: ${tpPrice.toFixed(2)}${reduceOnly ? ' (close)' : ''}`);
+        await signedRequest('POST', '/fapi/v1/order', params);
+        console.log(`TP${i} ${isLong ? 'LONG' : 'SHORT'}: ${tpPrice.toFixed(2)}${i===10 ? ' (close)' : ''}`);
       } catch (err) {
-        console.error(`Ошибка TP${i}:`, err.message);
+        console.error(`Ошибка TP${i} ${positionSide}:`, err.message);
       }
     }
   }
 
-  // В orderManager.js — добавь эти методы
+  static async moveSLToBreakeven(symbol, positionSide, entryPrice) {
+    const side = positionSide === 'LONG' ? 'SELL' : 'BUY';
+    const stopPrice = roundToTick(entryPrice, symbol);
 
-  static async openPositionWithSL(symbol, side, quantity, entryPrice, stopPrice) {
-    const positionSide = side === 'BUY' ? 'LONG' : 'SHORT';
     try {
+      await signedRequest('DELETE', '/fapi/v1/allOpenOrders', { symbol });
       await signedRequest('POST', '/fapi/v1/order', {
         symbol,
         side,
-        type: 'MARKET',
-        quantity: quantity.toFixed(6),
-        positionSide,
-      });
-      console.log(`Открыто: ${positionSide} @ ${entryPrice.toFixed(2)} | SL: ${stopPrice.toFixed(2)}`);
-
-      // Устанавливаем SL
-      await signedRequest('POST', '/fapi/v1/order', {
-        symbol,
-        side: side === 'BUY' ? 'SELL' : 'BUY',
-        type: 'STOP_MARKET',
-        quantity: quantity.toFixed(6),
-        stopPrice: stopPrice.toFixed(2),
-        positionSide,
-        closePosition: false,
-      });
-    } catch (err) {
-      console.error(`Ошибка ${positionSide}:`, err.message);
-    }
-  }
-
-  static async moveSLToBreakeven(symbol, positionSide, breakevenPrice) {
-    try {
-      await signedRequest('POST', '/fapi/v1/order', {
-        symbol,
-        side: positionSide === 'LONG' ? 'SELL' : 'BUY',
         type: 'STOP_MARKET',
         quantity: config.positionSize.toFixed(6),
-        stopPrice: breakevenPrice.toFixed(2),
+        stopPrice: stopPrice.toFixed(2),
         positionSide,
-        closePosition: false,
+        reduceOnly: true,
       });
-      console.log(`SL ${positionSide} → безубыток: ${breakevenPrice.toFixed(2)}`);
+      console.log(`SL ${positionSide} → безубыток: ${stopPrice.toFixed(2)}`);
     } catch (err) {
       console.error(`Ошибка безубытка:`, err.message);
     }

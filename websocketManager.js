@@ -1,85 +1,104 @@
-// websocketManager.js — ПОЛНОСТЬЮ РАБОЧИЙ userData
-const Binance = require('binance-api-node').default;
+// websocketManager.js
 const { EventEmitter } = require('events');
 const config = require('./config');
+const WebSocket = require('ws');
+if (!global.fetch) {
+  global.fetch = require('node-fetch');
+}
 
 class WebSocketManager extends EventEmitter {
   constructor() {
     super();
-    this.client = Binance({
-      apiKey: config.apiKey,
-      apiSecret: config.apiSecret,
-      useServerTime: true,
-      httpFutures: config.testnet ? 'https://testnet.binancefuture.com' : undefined,
-    });
     this.subscriptions = new Map();
     this.listenKey = null;
-    this.keepAliveInterval = null;
+    this.wsPrice = null;
+    this.wsUser = null;
   }
 
   async startMonitoring() {
-    // 1. aggTrade — цены
-    config.symbols.forEach(symbol => {
-      const stream = this.client.ws.futuresAggTrades(symbol, trade => {
-        const price = parseFloat(trade.price);
-        if (isNaN(price)) return;
-        this.emit('priceUpdate', { symbol, price, time: Date.now() });
-        console.log(`[${symbol}] Цена: ${price.toFixed(2)}`);
-      });
-      this.subscriptions.set(symbol, stream);
+    const symbol = config.symbols[0].toLowerCase();
+
+    // ЦЕНЫ — aggTrade (ОДИН URL ДЛЯ ТЕСТНЕТА И МЕЙНА)
+    const priceUrl = `wss://stream.binancefuture.com/ws/${symbol}@aggTrade`;
+    this.wsPrice = new WebSocket(priceUrl);
+
+    this.wsPrice.on('open', () => {
+      console.log('WebSocket: цены подключены');
     });
 
-    // 2. userData — ордера
-    try {
-      this.listenKey = await this.client.futuresUserDataStream();
-      console.log('userData stream: подключено');
+    this.wsPrice.on('message', data => {
+      const trade = JSON.parse(data);
+      const price = parseFloat(trade.p);
+      if (isNaN(price)) return;
+      this.emit('priceUpdate', { symbol: config.symbols[0], price });
+    });
 
-      const userStream = this.client.ws.futuresUserData(
-        this.listenKey,
-        update => {
-          if (update.eventType === 'ORDER_TRADE_UPDATE') {
-            const o = update.order;
-            if (o.executionType === 'TRADE' && o.orderStatus === 'FILLED') {
-              this.emit('orderFilled', {
-                symbol: o.symbol,
-                side: o.side,
-                positionSide: o.positionSide,
-                price: parseFloat(o.lastFilledPrice),
-                qty: parseFloat(o.lastFilledQuantity),
-                orderId: o.orderId,
-              });
-            }
+    this.wsPrice.on('error', err => console.error('WebSocket цены ошибка:', err.message));
+    this.wsPrice.on('close', () => console.log('WebSocket цены отключён'));
+
+    // USER DATA — listenKey
+    try {
+      const baseUrl = config.testnet 
+        ? 'https://testnet.binancefuture.com' 
+        : 'https://fapi.binance.com';
+
+      const listenKeyUrl = `${baseUrl}/fapi/v1/listenKey`;
+      const res = await fetch(listenKeyUrl, {
+        method: 'POST',
+        headers: { 'X-MBX-APIKEY': config.apiKey },
+      });
+      const { listenKey } = await res.json();
+      this.listenKey = listenKey;
+
+      // userData — ТОТ ЖЕ URL: stream.binancefuture.com
+      const userUrl = `wss://stream.binancefuture.com/ws/${listenKey}`;
+      this.wsUser = new WebSocket(userUrl);
+
+      this.wsUser.on('open', () => console.log('userData stream: подключено'));
+      this.wsUser.on('message', data => {
+        const update = JSON.parse(data);
+        if (update.e === 'ORDER_TRADE_UPDATE') {
+          const o = update.o;
+          if (o.X === 'FILLED' && o.x === 'TRADE') {
+            this.emit('orderFilled', {
+              symbol: o.s,
+              side: o.S,
+              positionSide: o.ps,
+              price: parseFloat(o.L),
+              qty: parseFloat(o.l),
+            });
           }
         }
-      );
+      });
 
-      this.subscriptions.set('userData', userStream);
+      this.wsUser.on('error', err => console.error('userData ошибка:', err.message));
 
-      // Keep-alive каждые 30 минут
+      // Keep-alive
       this.keepAliveInterval = setInterval(async () => {
         try {
-          await this.client.futuresKeepAliveUserDataStream(this.listenKey);
-        } catch (err) {
-          console.error('Keep-alive failed:', err.message);
-        }
-      }, 25 * 60 * 1000); // 25 минут
+          await fetch(listenKeyUrl, { method: 'PUT', headers: { 'X-MBX-APIKEY': config.apiKey } });
+        } catch (e) {}
+      }, 25 * 60 * 1000);
 
     } catch (err) {
       console.error('userData stream ошибка:', err.message);
     }
 
-    console.log(`WebSocket: цены + userData`);
+    console.log('WebSocket: цены + userData (без логов цен)');
   }
 
   stop() {
-    this.subscriptions.forEach(unsub => {
-      try { unsub(); } catch (e) {}
-    });
+    [this.wsPrice, this.wsUser].forEach(ws => ws?.close());
     if (this.keepAliveInterval) clearInterval(this.keepAliveInterval);
     if (this.listenKey) {
-      this.client.futuresCloseUserDataStream(this.listenKey).catch(() => {});
+      const baseUrl = config.testnet 
+        ? 'https://testnet.binancefuture.com' 
+        : 'https://fapi.binance.com';
+      fetch(`${baseUrl}/fapi/v1/listenKey`, {
+        method: 'DELETE',
+        headers: { 'X-MBX-APIKEY': config.apiKey },
+      }).catch(() => {});
     }
-    this.subscriptions.clear();
     console.log('WebSocket отключён');
   }
 }
