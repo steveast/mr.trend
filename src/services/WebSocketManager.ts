@@ -8,29 +8,42 @@ export class WebSocketManager extends EventEmitter {
 
   constructor(testnet: boolean = true) {
     super();
-    const wsURL = testnet
+    const wsUrl = testnet
       ? "wss://stream.binancefuture.com"
       : "wss://fstream.binance.com";
-    this.wsClient = new WebsocketClient({ wsURL });
+    this.wsClient = new WebsocketClient({ wsUrl });
 
-    this.wsClient.on("formattedMessage", (data: any) => {
-      if (data.eventType === "markPriceUpdate") {
-        const markPrice = parseFloat(data.markPrice);
-        this.emit("price", markPrice);
-      }
-    });
-
+    // Подключаемся к событиям
     this.wsClient.on("open", () => console.log("WebSocket connected"));
     this.wsClient.on("reconnecting", () =>
       console.log("WebSocket reconnecting")
     );
     this.wsClient.on("reconnected", () => console.log("WebSocket reconnected"));
-    this.wsClient.on("error", err => console.error("WebSocket error:", err));
+
+    // ОШИБКИ — только через formattedMessage
+    this.wsClient.on("formattedMessage", (data: any) => {
+      if (data.eventType === "markPriceUpdate") {
+        const markPrice = parseFloat(data.markPrice);
+        this.emit("price", markPrice);
+      }
+
+      // Ловим ошибки WebSocket
+      if (data.code && data.msg) {
+        console.error("WebSocket error:", data.msg);
+      }
+    });
+
+    // НЕ ИСПОЛЬЗУЕМ .on('error') — SDK не позволяет
   }
 
   start(symbol: string = "BTCUSDT") {
-    this.wsClient.subscribeUsdFuturesMarkPrice(symbol.toLowerCase(), "1s");
-    console.log(`Subscribed to ${symbol}@markPrice@1s`);
+    try {
+      // ПРАВИЛЬНЫЙ МЕТОД: usdm + 1000ms
+      this.wsClient.subscribeMarkPrice(symbol, "usdm", 1000);
+      console.log(`Subscribed to ${symbol}@markPrice@1000ms (USDM)`);
+    } catch (err: any) {
+      console.error("Subscribe error:", err.message);
+    }
   }
 
   stop() {

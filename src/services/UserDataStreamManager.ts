@@ -14,18 +14,22 @@ export class UserDataStreamManager extends EventEmitter {
     testnet: boolean = true
   ) {
     super();
-    const wsURL = testnet
+    const wsUrl = testnet
       ? "wss://stream.binancefuture.com"
       : "wss://fstream.binance.com";
-    this.ws = new WebsocketClient({ wsURL });
+    this.ws = new WebsocketClient({ wsUrl });
   }
 
   async start() {
     try {
-      this.listenKey = await this.client.startFuturesUserDataStream();
-      console.log("User Data Stream started:", this.listenKey);
+      const response = await this.client.getFuturesUserDataListenKey();
+      this.listenKey = response.listenKey;
+      console.log("User Data Stream listenKey:", this.listenKey);
 
-      this.ws!.subscribeUserDataStream(this.listenKey);
+      if (!this.listenKey) throw new Error("No listenKey");
+
+      // КЛЮЧЕВОЕ: as any — обходим баг типизации SDK
+      this.ws!.subscribeUsdFuturesUserDataStream(this.listenKey as any);
 
       this.ws!.on("formattedMessage", (data: any) => {
         if (data.eventType === "ORDER_TRADE_UPDATE") {
@@ -38,32 +42,49 @@ export class UserDataStreamManager extends EventEmitter {
               symbol: order.symbol,
               side: order.side,
               type: order.type,
-              price: parseFloat(order.price),
-              qty: parseFloat(order.quantity),
+              price: parseFloat(order.lastFilledPrice || order.price || "0"),
+              qty: parseFloat(
+                order.lastFilledQuantity || order.quantity || "0"
+              ),
               reduceOnly: order.reduceOnly,
             });
           }
         }
       });
 
-      // Keep-alive каждые 30 минут
       this.keepAliveInterval = setInterval(
         async () => {
           if (this.listenKey) {
-            await this.client.keepAliveFuturesUserDataStream();
+            try {
+              await this.client.keepAliveFuturesUserDataListenKey();
+              console.log("ListenKey renewed");
+            } catch (err) {
+              console.error("Keep-alive failed:", err);
+            }
           }
         },
         25 * 60 * 1000
       );
     } catch (error: any) {
-      console.error("UserDataStream error:", error.message);
+      console.error("UserDataStream start error:", error.message);
     }
   }
 
   stop() {
-    if (this.keepAliveInterval) clearInterval(this.keepAliveInterval);
-    if (this.listenKey) this.client.closeFuturesUserDataStream();
-    if (this.ws) this.ws.closeAll(true);
+    if (this.keepAliveInterval) {
+      clearInterval(this.keepAliveInterval);
+      this.keepAliveInterval = null;
+    }
+    if (this.listenKey) {
+      try {
+        this.client.closeFuturesUserDataListenKey();
+      } catch (err) {}
+      this.listenKey = null;
+    }
+    if (this.ws) {
+      this.ws.closeAll(true);
+      this.ws = null;
+    }
     console.log("User Data Stream stopped");
   }
 }
