@@ -3,11 +3,12 @@ import { USDMClient } from "binance";
 export interface OrderParams {
   symbol: string;
   side: "BUY" | "SELL";
-  type: "LIMIT" | "MARKET" | "STOP" | "TAKE_PROFIT";
+  type: "MARKET" | "LIMIT" | "STOP_MARKET" | "TAKE_PROFIT_MARKET";
   quantity: number;
   price?: number;
   stopPrice?: number;
   timeInForce?: "GTC" | "IOC" | "FOK";
+  reduceOnly?: boolean;
 }
 
 export class OrderManager {
@@ -23,17 +24,24 @@ export class OrderManager {
         price: params.price?.toFixed(2),
         stopPrice: params.stopPrice?.toFixed(2),
         timeInForce: params.timeInForce || "GTC",
-      });
+        reduceOnly: params.reduceOnly,
+      } as any); // Приводим к any, т.к. тип не экспортируется
+
       console.log(
         `Order placed: ${params.side} ${params.type} @ ${params.price || params.stopPrice}`
       );
       return response;
     } catch (error: any) {
-      console.error("Order error:", error.message);
+      console.error("Order error:", error.body?.msg || error.message);
+      throw error;
     }
   }
 
   async cancelAll(symbol: string) {
-    await this.client.cancelAllOpenOrders({ symbol });
+    try {
+      await this.client.cancelAllOpenOrders({ symbol });
+    } catch (error: any) {
+      console.error("Cancel error:", error.body?.msg || error.message);
+    }
   }
 }

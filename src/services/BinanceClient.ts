@@ -12,7 +12,7 @@ export class BinanceClient {
     });
   }
 
-  getClient() {
+  getClient(): USDMClient {
     return this.client;
   }
 }

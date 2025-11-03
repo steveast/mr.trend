@@ -1,33 +1,40 @@
-import { MainClient } from "binance";
+// src/services/WebSocketManager.ts
+
+import { WebsocketClient } from "binance";
 import { EventEmitter } from "events";
 
 export class WebSocketManager extends EventEmitter {
-  private client: MainClient;
-  private stream: any;
+  private wsClient: WebsocketClient;
 
-  constructor() {
+  constructor(testnet: boolean = true) {
     super();
-    this.client = new MainClient({});
+    const wsURL = testnet
+      ? "wss://stream.binancefuture.com"
+      : "wss://fstream.binance.com";
+    this.wsClient = new WebsocketClient({ wsURL });
+
+    this.wsClient.on("formattedMessage", (data: any) => {
+      if (data.eventType === "markPriceUpdate") {
+        const markPrice = parseFloat(data.markPrice);
+        this.emit("price", markPrice);
+      }
+    });
+
+    this.wsClient.on("open", () => console.log("WebSocket connected"));
+    this.wsClient.on("reconnecting", () =>
+      console.log("WebSocket reconnecting")
+    );
+    this.wsClient.on("reconnected", () => console.log("WebSocket reconnected"));
+    this.wsClient.on("error", err => console.error("WebSocket error:", err));
   }
 
   start(symbol: string = "BTCUSDT") {
-    const streamName = `${symbol.toLowerCase()}@markPrice@1s`;
-    this.stream = this.client.subscribe(streamName);
-
-    this.stream.then((socket: any) => {
-      socket.on("message", (data: any) => {
-        const markPrice = parseFloat(data.markPrice);
-        this.emit("price", markPrice);
-      });
-
-      socket.on("close", () => {
-        console.log("WebSocket closed. Reconnecting...");
-        setTimeout(() => this.start(symbol), 1000);
-      });
-    });
+    this.wsClient.subscribeUsdFuturesMarkPrice(symbol.toLowerCase(), "1s");
+    console.log(`Subscribed to ${symbol}@markPrice@1s`);
   }
 
   stop() {
-    this.stream?.then((socket: any) => socket.close());
+    this.wsClient.closeAll(true);
+    console.log("WebSocket closed");
   }
 }
