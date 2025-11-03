@@ -143,12 +143,13 @@ class OrderManager {
   }
 
   // === ТЕЙКИ ОТ СТОПА ===
-  static async placeTakeProfits(symbol, side, quantity, entryPrice, stopPrice, positionSide) {
+  static async placeTakeProfits(symbol, allQuantity, entryPrice, stopPrice, positionSide) {
     const isLong = positionSide === 'LONG';
     const tpSide = isLong ? 'SELL' : 'BUY';
     const distance = Math.abs(entryPrice - stopPrice);
     const step = distance * 0.1;
-
+    const quantity =  allQuantity / 10;
+    
     for (let i = 1; i <= 10; i++) {
       const tpPrice = this.roundToTick(
         isLong 
@@ -156,7 +157,6 @@ class OrderManager {
           : stopPrice - (step * i),
         symbol
       );
-
       const params = {
         symbol,
         side: tpSide,
@@ -168,7 +168,7 @@ class OrderManager {
       };
 
       if (i === 10) {
-        //params.reduceOnly = true;
+        params.quantity = allQuantity;
       }
 
       try {
@@ -194,7 +194,7 @@ class OrderManager {
         quantity: config.positionSize.toFixed(6),
         stopPrice: stopPrice.toFixed(2),
         positionSide,
-        //reduceOnly: true,
+        reduceOnly: true,
       });
       console.log(`SL ${positionSide} → безубыток: ${stopPrice.toFixed(2)}`);
     } catch (err) {

@@ -45,7 +45,7 @@ class TradingBot {
       console.log('Обе позиции отправлены на открытие');
 
       // ЖДЁМ
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 200));
 
       // СТОПЫ
       await Promise.all([
@@ -55,12 +55,12 @@ class TradingBot {
       console.log('Стопы выставлены');
 
       // ЖДЁМ
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 100));
 
       // ТЕЙКИ
       await Promise.all([
-        OrderManager.placeTakeProfits(this.symbol, 'BUY', qty, price, this.longSL, 'LONG'),
-        OrderManager.placeTakeProfits(this.symbol, 'SELL', qty, price, this.shortSL, 'SHORT'),
+        OrderManager.placeTakeProfits(this.symbol, qty, price, this.shortSL, 'LONG'),
+        OrderManager.placeTakeProfits(this.symbol, qty, price, this.longSL, 'SHORT'),
       ]);
       console.log('Грид тейков выставлен (20 ордеров)');
 
