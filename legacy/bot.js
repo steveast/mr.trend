@@ -1,7 +1,7 @@
 // bot.js
-const WebSocketManager = require('./websocketManager');
-const OrderManager = require('./orderManager');
-const config = require('./config');
+const WebSocketManager = require('../websocketManager');
+const OrderManager = require('../orderManager');
+const config = require('../config');
 
 class TradingBot {
   constructor() {
@@ -80,6 +80,7 @@ class TradingBot {
   // === ОТСЛЕЖИВАНИЕ ЗАКРЫТИЯ ПОЗИЦИЙ ===
   async handleOrderFilled({ symbol, side, positionSide, price, quantity }) {
     if (symbol !== this.symbol || !this.active) return;
+    console.log(symbol, side, positionSide, price, quantity);
 
     // Проверяем, закрылась ли позиция полностью
     const position = await this.getPosition(positionSide);
