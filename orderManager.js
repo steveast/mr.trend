@@ -186,7 +186,7 @@ class OrderManager {
     const stopPrice = this.roundToTick(entryPrice, symbol);
 
     try {
-      await this.signedRequest('DELETE', '/fapi/v1/allOpenOrders', { symbol });
+      // await this.signedRequest('DELETE', '/fapi/v1/allOpenOrders', { symbol });
       await this.signedRequest('POST', '/fapi/v1/order', {
         symbol,
         side,
