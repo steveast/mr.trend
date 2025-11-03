@@ -180,27 +180,44 @@ class OrderManager {
     }
   }
 
-  // === БЕЗУБЫТОК ===
-  static async moveSLToBreakeven(symbol, positionSide, entryPrice) {
+  // В orderManager.js — замени moveSLToBreakeven на эту:
+static async moveSLToBreakeven(symbol, positionSide, entryPrice) {
+  try {
+    const positions = await this.signedRequest('GET', '/fapi/v1/positionRisk', { symbol });
+    const position = positions.find(p => p.positionSide === positionSide && p.symbol === symbol);
+
+    if (!position || parseFloat(position.positionAmt) === 0) return;
+
+    const qty = Math.abs(parseFloat(position.positionAmt)).toFixed(6);
     const side = positionSide === 'LONG' ? 'SELL' : 'BUY';
     const stopPrice = this.roundToTick(entryPrice, symbol);
 
-    try {
-      // await this.signedRequest('DELETE', '/fapi/v1/allOpenOrders', { symbol });
-      await this.signedRequest('POST', '/fapi/v1/order', {
-        symbol,
-        side,
-        type: 'STOP_MARKET',
-        quantity: config.positionSize.toFixed(6),
-        stopPrice: stopPrice.toFixed(2),
-        positionSide,
-        reduceOnly: true,
-      });
-      console.log(`SL ${positionSide} → безубыток: ${stopPrice.toFixed(2)}`);
-    } catch (err) {
-      console.error(`Ошибка безубытка:`, err.message);
+    // Удаляем старый SL
+    const openOrders = await this.signedRequest('GET', '/fapi/v1/openOrders', { symbol });
+    const oldSL = openOrders.find(o =>
+      o.type === 'STOP_MARKET' && o.reduceOnly && o.positionSide === positionSide
+    );
+    if (oldSL) {
+      await this.signedRequest('DELETE', '/fapi/v1/order', { symbol, orderId: oldSL.orderId });
     }
+
+    // Новый SL в безубыток
+    await this.signedRequest('POST', '/fapi/v1/order', {
+      symbol,
+      side,
+      type: 'STOP_MARKET',
+      quantity: qty,
+      stopPrice: stopPrice.toFixed(8),
+      positionSide,
+      reduceOnly: true,
+      timeInForce: 'GTC'
+    });
+
+    console.log(`SL ${positionSide} → безубыток: ${stopPrice.toFixed(2)} (qty: ${qty})`);
+  } catch (err) {
+    console.error(`Ошибка безубытка [${symbol} ${positionSide}]:`, err.message);
   }
+}
 }
 
 // ИНИЦИАЛИЗАЦИЯ
