@@ -6,27 +6,30 @@ export interface OrderParams {
   type: "MARKET" | "LIMIT" | "STOP_MARKET" | "TAKE_PROFIT_MARKET";
   quantity: number;
   price?: number;
+  positionSide?: "SHORT" | "LONG";
   stopPrice?: number;
   timeInForce?: "GTC" | "IOC" | "FOK";
   reduceOnly?: boolean;
 }
 
 export class OrderManager {
-  constructor(private client: USDMClient) {}
+  constructor(public client: USDMClient) {}
 
   async placeOrder(params: OrderParams) {
     try {
-      const fullOrderProps = {
-        symbol: params.symbol,
-        side: params.side,
-        type: params.type,
-        positionSide: params.side === "SELL" ? "SHORT" : "LONG",
-        quantity: params.quantity.toFixed(6),
-        price: params.price?.toFixed(2),
-        stopPrice: params.stopPrice?.toFixed(2),
-        timeInForce: params.timeInForce || "GTC",
-        // reduceOnly: params.reduceOnly,
-      } as any;
+      const fullOrderProps: any = Object.fromEntries(
+        Object.entries({
+          symbol: params.symbol,
+          side: params.side,
+          type: params.type,
+          positionSide: params.side === "SELL" ? "SHORT" : "LONG",
+          quantity: params.quantity.toFixed(3),
+          price: params.price?.toFixed(2),
+          stopPrice: params.stopPrice?.toFixed(2),
+          // timeInForce: params.timeInForce || "GTC",
+          reduceOnly: params.reduceOnly,
+        } as any).filter(([_, v]) => v !== undefined)
+      );
 
       if (
         params.type === "STOP_MARKET" ||

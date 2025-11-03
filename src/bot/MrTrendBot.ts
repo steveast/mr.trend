@@ -34,7 +34,8 @@ export class MrTrendBot {
     console.log("MrTrend Bot Starting...");
 
     // Запуск WebSocket цены
-    this.ws.on("price", async (price: number) => {
+    this.ws.on("price", async (priceSource: number) => {
+      const price = +priceSource.toFixed(2);
       if (!this.entryTriggered && !this.cycleActive) {
         this.entryTriggered = true;
         this.cycleActive = true;

@@ -1,5 +1,3 @@
-// src/strategies/GridDualStrategy.ts
-
 import { OrderManager } from "../services/OrderManager";
 
 interface Position {
@@ -16,7 +14,7 @@ export class GridDualStrategy {
   private long: Position | null = null;
   private short: Position | null = null;
   private symbol = "BTCUSDT";
-  private quantity = 0.001;
+  private quantity = 0.01;
   private onCycleComplete?: () => void;
 
   constructor(private orderManager: OrderManager) {}
@@ -31,10 +29,10 @@ export class GridDualStrategy {
 
     this.long = {
       entry: entryPrice,
-      stop: entryPrice - stopDistance,
+      stop: +(entryPrice - stopDistance).toFixed(2),
       takeProfits: Array.from(
         { length: 10 },
-        (_, i) => entryPrice + tpStep * (i + 1)
+        (_, i) => +(entryPrice + stopDistance + tpStep * (i + 1)).toFixed(2)
       ),
       side: "LONG",
       active: true,
@@ -47,7 +45,7 @@ export class GridDualStrategy {
       stop: entryPrice + stopDistance,
       takeProfits: Array.from(
         { length: 10 },
-        (_, i) => entryPrice - tpStep * (i + 1)
+        (_, i) => +(entryPrice - stopDistance - tpStep * (i + 1)).toFixed(2)
       ),
       side: "SHORT",
       active: true,
@@ -55,81 +53,154 @@ export class GridDualStrategy {
       closed: false,
     };
 
+    console.log("LONG", this.long);
+    console.log("SHORT", this.short);
+
+    // ШАГ 1: ОТКРЫВАЕМ ПОЗИЦИИ
+    await this.openPositions();
+
+    await new Promise(res => setTimeout(res, 200));
+
+    // ШАГ 2: СТАВИМ СТОПЫ И ТЕЙКИ
     await this.placeInitialOrders();
+  }
+
+  private async openPositions() {
+    if (!this.long || !this.short) return;
+
+    console.log(`Opening LONG at market (${this.quantity} BTC)`);
+    console.log(`Opening SHORT at market (${this.quantity} BTC)`);
+
+    // Отправляем оба ордера одновременно
+    await Promise.all([
+      this.orderManager.placeOrder({
+        symbol: this.symbol,
+        side: "BUY",
+        type: "MARKET",
+        quantity: this.quantity,
+      }),
+      this.orderManager.placeOrder({
+        symbol: this.symbol,
+        side: "SELL",
+        type: "MARKET",
+        quantity: this.quantity,
+      }),
+    ]);
+
+    console.log("Both positions opened at market");
   }
 
   private async placeInitialOrders() {
     if (!this.long || !this.short) return;
 
-    // === СТОПЫ ===
-    await this.orderManager.placeOrder({
-      symbol: this.symbol,
-      side: "SELL",
-      type: "STOP_MARKET",
-      quantity: this.quantity,
-      stopPrice: this.long.stop,
-      reduceOnly: true,
-    });
+    const positions = await this.orderManager.client.getPositionsV3(); // возвращает массив всех позиций
+    const symbolPositions = positions.filter(p => p.symbol === this.symbol);
 
-    await this.orderManager.placeOrder({
-      symbol: this.symbol,
-      side: "BUY",
-      type: "STOP_MARKET",
-      quantity: this.quantity,
-      stopPrice: this.short.stop,
-      reduceOnly: true,
-    });
+    const longPos = symbolPositions.find(p => p.positionSide === "LONG");
+    const shortPos = symbolPositions.find(p => p.positionSide === "SHORT");
+    const longAmt = parseFloat((longPos?.positionAmt as any) || "0");
+    const shortAmt = parseFloat((shortPos?.positionAmt as any) || "0");
 
-    // === ТЕЙК-ПРОФИТЫ (9 частичных + 1 финальный) ===
-    /* for (let i = 0; i < 9; i++) {
+    // собираем ордера в массив
+    const orders: Promise<any>[] = [];
+
+    if (longPos && longAmt > 0) {
+      orders.push(
+        this.orderManager.placeOrder({
+          symbol: this.symbol,
+          side: "SELL",
+          type: "STOP_MARKET",
+          quantity: longAmt,
+          positionSide: "LONG",
+          stopPrice: this.long.stop,
+        })
+      );
+    }
+
+    if (shortPos && shortAmt < 0) {
+      orders.push(
+        this.orderManager.placeOrder({
+          symbol: this.symbol,
+          side: "BUY",
+          type: "STOP_MARKET",
+          quantity: Math.abs(shortAmt),
+          positionSide: "SHORT",
+          stopPrice: this.short.stop,
+        })
+      );
+    }
+
+    // отправляем все ордера одновременно
+    await Promise.all(orders);
+
+    console.log("STOP_MARKET ордера установлены одновременно");
+
+    const allOrders: Promise<any>[] = [];
+
+    // === 9 частичных тейков ===
+    for (let i = 0; i < 9; i++) {
       const qty = this.quantity / 10;
+      console.log(`Partial TP ${i + 1}: qty=${qty}`);
 
       // LONG TP
-      await this.orderManager.placeOrder({
+      allOrders.push(
+        this.orderManager.placeOrder({
+          symbol: this.symbol,
+          side: "SELL",
+          type: "TAKE_PROFIT_MARKET",
+          quantity: qty,
+          stopPrice: this.long.takeProfits[i],
+          positionSide: "LONG",
+        })
+      );
+
+      // SHORT TP
+      allOrders.push(
+        this.orderManager.placeOrder({
+          symbol: this.symbol,
+          side: "BUY",
+          type: "TAKE_PROFIT_MARKET",
+          quantity: qty,
+          stopPrice: this.short.takeProfits[i],
+          positionSide: "SHORT",
+        })
+      );
+    }
+
+    // === Последний тейк (финальный) ===
+    allOrders.push(
+      this.orderManager.placeOrder({
         symbol: this.symbol,
         side: "SELL",
         type: "TAKE_PROFIT_MARKET",
-        quantity: qty,
-        stopPrice: this.long.takeProfits[i],
-        reduceOnly: true,
-      });
+        quantity: this.quantity,
+        stopPrice: this.long.takeProfits[9],
+        positionSide: "LONG",
+      })
+    );
 
-      // SHORT TP
-      await this.orderManager.placeOrder({
+    allOrders.push(
+      this.orderManager.placeOrder({
         symbol: this.symbol,
         side: "BUY",
         type: "TAKE_PROFIT_MARKET",
-        quantity: qty,
-        stopPrice: this.short.takeProfits[i],
-        reduceOnly: true,
-      });
-    } */
+        quantity: this.quantity,
+        stopPrice: this.short.takeProfits[9],
+        positionSide: "SHORT",
+      })
+    );
 
-    // Последний тейк — закрывает позицию
-   /*  await this.orderManager.placeOrder({
-      symbol: this.symbol,
-      side: "SELL",
-      type: "TAKE_PROFIT_MARKET",
-      quantity: this.quantity * 0.1,
-      stopPrice: this.long.takeProfits[9],
-      reduceOnly: true,
-    }); */
+    // Отправляем все тейки одновременно
+    await Promise.all(allOrders);
 
-    /* await this.orderManager.placeOrder({
-      symbol: this.symbol,
-      side: "BUY",
-      type: "TAKE_PROFIT_MARKET",
-      quantity: this.quantity * 0.1,
-      stopPrice: this.short.takeProfits[9],
-      reduceOnly: true,
-    }); */
+    console.log("Все тейки (частичные + финальные) выставлены одновременно");
   }
 
   async handleOrderFilled(order: any) {
     if (!this.long || !this.short) return;
 
-    const isLong = order.side === "SELL" && order.reduceOnly;
-    const isShort = order.side === "BUY" && order.reduceOnly;
+    const isLong = order.side === "SELL";
+    const isShort = order.side === "BUY";
 
     if (order.type === "STOP_MARKET") {
       if (isLong && this.long.active) {
@@ -181,7 +252,6 @@ export class GridDualStrategy {
         type: "STOP_MARKET",
         quantity: this.quantity,
         stopPrice: opposite.entry,
-        reduceOnly: true,
       });
       console.log(`${opposite.side} moved to breakeven`);
     }
@@ -189,14 +259,14 @@ export class GridDualStrategy {
 
   private async moveStopToBreakeven(side: "LONG" | "SHORT") {
     const position = side === "LONG" ? this.long : this.short;
-    if (position && position.active) {
+    const opposite = side === "LONG" ? this.short : this.long;
+    if (position && position.active && opposite) {
       await this.orderManager.placeOrder({
         symbol: this.symbol,
         side: side === "LONG" ? "SELL" : "BUY",
         type: "STOP_MARKET",
         quantity: this.quantity,
-        stopPrice: position.entry,
-        reduceOnly: true,
+        stopPrice: opposite.stop,
       });
       console.log(`${side} first TP → stop to breakeven`);
     }
