@@ -52,7 +52,7 @@ class TradingBot {
         OrderManager.openMarketPosition(this.symbol, 'SELL', qty, 'SHORT'),
       ]);
 
-      await new Promise(r => setTimeout(r, 300));
+      // await new Promise(r => setTimeout(r, 300));
 
       // 2. Стопы
       await Promise.all([
@@ -60,7 +60,7 @@ class TradingBot {
         OrderManager.placeStopLoss(this.symbol, 'SELL', qty, this.shortSL, 'SHORT'),
       ]);
 
-      await new Promise(r => setTimeout(r, 200));
+      // await new Promise(r => setTimeout(r, 200));
 
       // 3. Тейки
       await Promise.all([
@@ -88,6 +88,14 @@ class TradingBot {
     if (remaining < 0.00001) { // ~0
       if (!this.positionsClosed[positionSide]) {
         console.log(`[ЗАКРЫТА] ${positionSide} позиция`);
+        OrderManager.placeStopLoss(
+          this.symbol, 
+          positionSide === 'LONG' ? 'SELL' : 'BUY', 
+          qty, 
+          this.entryPrice, 
+          positionSide,
+        );
+        console.log(`[СТОП] установлен на позицию`);
         this.positionsClosed[positionSide] = true;
       }
     }
