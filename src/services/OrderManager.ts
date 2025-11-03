@@ -13,6 +13,8 @@ export interface OrderParams {
 }
 
 export class OrderManager {
+  private symbol = "BTCUSDT";
+
   constructor(public client: USDMClient) {}
 
   async placeOrder(params: OrderParams) {
@@ -58,5 +60,22 @@ export class OrderManager {
     } catch (error: any) {
       console.error("Cancel error:", error.body?.msg || error.message);
     }
+  }
+
+  async getPosition() {
+    const positions = await this.client.getPositionsV3();
+    const symbolPositions = positions.filter(p => p.symbol === this.symbol);
+
+    const longPos = symbolPositions.find(p => p.positionSide === "LONG");
+    const shortPos = symbolPositions.find(p => p.positionSide === "SHORT");
+    const longAmt = parseFloat((longPos?.positionAmt as any) || "0");
+    const shortAmt = parseFloat((shortPos?.positionAmt as any) || "0");
+
+    return {
+      longPos,
+      shortPos,
+      longAmt,
+      shortAmt,
+    };
   }
 }
