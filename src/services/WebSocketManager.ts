@@ -11,7 +11,13 @@ export class WebSocketManager extends EventEmitter {
     const wsUrl = testnet
       ? "wss://stream.binancefuture.com"
       : "wss://fstream.binance.com";
-    this.wsClient = new WebsocketClient({ wsUrl });
+    this.wsClient = new WebsocketClient({
+      wsUrl,
+      beautify: testnet,
+      api_key: process.env.API_KEY,
+      api_secret: process.env.API_SECRET,
+      testnet,
+    });
 
     // Подключаемся к событиям
     this.wsClient.on("open", () => console.log("WebSocket connected"));

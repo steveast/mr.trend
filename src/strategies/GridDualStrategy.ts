@@ -55,10 +55,9 @@ export class GridDualStrategy {
       closed: false,
     };
 
-    await this.placeInitialOrders(); // ← Теперь метод существует
+    await this.placeInitialOrders();
   }
 
-  // ДОБАВЛЕННЫЙ МЕТОД
   private async placeInitialOrders() {
     if (!this.long || !this.short) return;
 
@@ -82,7 +81,7 @@ export class GridDualStrategy {
     });
 
     // === ТЕЙК-ПРОФИТЫ (9 частичных + 1 финальный) ===
-    for (let i = 0; i < 9; i++) {
+    /* for (let i = 0; i < 9; i++) {
       const qty = this.quantity / 10;
 
       // LONG TP
@@ -104,26 +103,26 @@ export class GridDualStrategy {
         stopPrice: this.short.takeProfits[i],
         reduceOnly: true,
       });
-    }
+    } */
 
     // Последний тейк — закрывает позицию
-    await this.orderManager.placeOrder({
+   /*  await this.orderManager.placeOrder({
       symbol: this.symbol,
       side: "SELL",
       type: "TAKE_PROFIT_MARKET",
       quantity: this.quantity * 0.1,
       stopPrice: this.long.takeProfits[9],
       reduceOnly: true,
-    });
+    }); */
 
-    await this.orderManager.placeOrder({
+    /* await this.orderManager.placeOrder({
       symbol: this.symbol,
       side: "BUY",
       type: "TAKE_PROFIT_MARKET",
       quantity: this.quantity * 0.1,
       stopPrice: this.short.takeProfits[9],
       reduceOnly: true,
-    });
+    }); */
   }
 
   async handleOrderFilled(order: any) {

@@ -16,16 +16,28 @@ export class OrderManager {
 
   async placeOrder(params: OrderParams) {
     try {
-      const response = await this.client.submitNewOrder({
+      const fullOrderProps = {
         symbol: params.symbol,
         side: params.side,
         type: params.type,
+        positionSide: params.side === "SELL" ? "SHORT" : "LONG",
         quantity: params.quantity.toFixed(6),
         price: params.price?.toFixed(2),
         stopPrice: params.stopPrice?.toFixed(2),
         timeInForce: params.timeInForce || "GTC",
-        reduceOnly: params.reduceOnly,
-      } as any); // Приводим к any, т.к. тип не экспортируется
+        // reduceOnly: params.reduceOnly,
+      } as any;
+
+      if (
+        params.type === "STOP_MARKET" ||
+        params.type === "TAKE_PROFIT_MARKET"
+      ) {
+        delete fullOrderProps.price;
+        delete fullOrderProps.timeInForce;
+      }
+      console.log("Gonna set", fullOrderProps);
+
+      const response = await this.client.submitNewOrder(fullOrderProps);
 
       console.log(
         `Order placed: ${params.side} ${params.type} @ ${params.price || params.stopPrice}`

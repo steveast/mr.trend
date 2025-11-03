@@ -35,7 +35,7 @@ export class MrTrendBot {
 
     // Запуск WebSocket цены
     this.ws.on("price", async (price: number) => {
-      if (!this.entryTriggered && !this.cycleActive && price <= 110400.1) {
+      if (!this.entryTriggered && !this.cycleActive) {
         this.entryTriggered = true;
         this.cycleActive = true;
         console.log(`New cycle: Entry at ${price.toFixed(2)}`);

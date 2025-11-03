@@ -17,19 +17,18 @@ export class UserDataStreamManager extends EventEmitter {
     const wsUrl = testnet
       ? "wss://stream.binancefuture.com"
       : "wss://fstream.binance.com";
-    this.ws = new WebsocketClient({ wsUrl });
+    this.ws = new WebsocketClient({
+      wsUrl,
+      beautify: testnet,
+      api_key: process.env.API_KEY,
+      api_secret: process.env.API_SECRET,
+      testnet,
+    });
   }
 
   async start() {
     try {
-      const response = await this.client.getFuturesUserDataListenKey();
-      this.listenKey = response.listenKey;
-      console.log("User Data Stream listenKey:", this.listenKey);
-
-      if (!this.listenKey) throw new Error("No listenKey");
-
-      // КЛЮЧЕВОЕ: as any — обходим баг типизации SDK
-      this.ws!.subscribeUsdFuturesUserDataStream(this.listenKey as any);
+      this.ws!.subscribeUsdFuturesUserDataStream();
 
       this.ws!.on("formattedMessage", (data: any) => {
         if (data.eventType === "ORDER_TRADE_UPDATE") {
