@@ -1,7 +1,7 @@
 // bot.js
-const WebSocketManager = require('../websocketManager');
-const OrderManager = require('../orderManager');
-const config = require('../config');
+const WebSocketManager = require("../websocketManager");
+const OrderManager = require("../orderManager");
+const config = require("../config");
 
 class TradingBot {
   constructor() {
@@ -22,12 +22,12 @@ class TradingBot {
     }
 
     this.wsManager.startMonitoring();
-    this.wsManager.on('priceUpdate', this.handlePrice.bind(this));
-    this.wsManager.on('orderFilled', this.handleOrderFilled.bind(this));
+    this.wsManager.on("priceUpdate", this.handlePrice.bind(this));
+    this.wsManager.on("orderFilled", this.handleOrderFilled.bind(this));
 
     // Запускаем первый вход
     this.restartEntry();
-    console.log('Бот запущен — ждём вход...');
+    console.log("Бот запущен — ждём вход...");
   }
 
   // === НОВЫЙ ВХОД ПО ТЕКУЩЕЙ ЦЕНЕ ===
@@ -48,31 +48,54 @@ class TradingBot {
     try {
       // 1. Открываем позиции
       await Promise.all([
-        OrderManager.openMarketPosition(this.symbol, 'BUY', qty, 'LONG'),
-        OrderManager.openMarketPosition(this.symbol, 'SELL', qty, 'SHORT'),
+        OrderManager.openMarketPosition(this.symbol, "BUY", qty, "LONG"),
+        OrderManager.openMarketPosition(this.symbol, "SELL", qty, "SHORT"),
       ]);
 
       // await new Promise(r => setTimeout(r, 300));
 
       // 2. Стопы
       await Promise.all([
-        OrderManager.placeStopLoss(this.symbol, 'BUY', qty, this.longSL, 'LONG'),
-        OrderManager.placeStopLoss(this.symbol, 'SELL', qty, this.shortSL, 'SHORT'),
+        OrderManager.placeStopLoss(
+          this.symbol,
+          "BUY",
+          qty,
+          this.longSL,
+          "LONG"
+        ),
+        OrderManager.placeStopLoss(
+          this.symbol,
+          "SELL",
+          qty,
+          this.shortSL,
+          "SHORT"
+        ),
       ]);
 
       // await new Promise(r => setTimeout(r, 200));
 
       // 3. Тейки
       await Promise.all([
-        OrderManager.placeTakeProfits(this.symbol, qty, price, this.shortSL, 'LONG'),
-        OrderManager.placeTakeProfits(this.symbol, qty, price, this.longSL, 'SHORT'),
+        OrderManager.placeTakeProfits(
+          this.symbol,
+          qty,
+          price,
+          this.shortSL,
+          "LONG"
+        ),
+        OrderManager.placeTakeProfits(
+          this.symbol,
+          qty,
+          price,
+          this.longSL,
+          "SHORT"
+        ),
       ]);
 
       this.active = true;
-      console.log('Новый цикл запущен: позиции, стопы, тейки — всё на месте.');
-
+      console.log("Новый цикл запущен: позиции, стопы, тейки — всё на месте.");
     } catch (err) {
-      console.error('Ошибка при новом входе:', err.message);
+      console.error("Ошибка при новом входе:", err.message);
       setTimeout(() => this.restartEntry(), 5000);
     }
   }
@@ -86,15 +109,16 @@ class TradingBot {
     const position = await this.getPosition(positionSide);
     const remaining = Math.abs(parseFloat(position.positionAmt));
 
-    if (remaining < 0.00001) { // ~0
+    if (remaining < 0.00001) {
+      // ~0
       if (!this.positionsClosed[positionSide]) {
         console.log(`[ЗАКРЫТА] ${positionSide} позиция`);
         OrderManager.placeStopLoss(
-          this.symbol, 
-          positionSide === 'LONG' ? 'SELL' : 'BUY', 
-          qty, 
-          this.entryPrice, 
-          positionSide,
+          this.symbol,
+          positionSide === "LONG" ? "SELL" : "BUY",
+          qty,
+          this.entryPrice,
+          positionSide
         );
         console.log(`[СТОП] установлен на позицию`);
         this.positionsClosed[positionSide] = true;
@@ -102,19 +126,28 @@ class TradingBot {
     }
 
     // === ПЕРВЫЙ ТЕЙК → БЕЗУБЫТОК ОППОНЕНТА ===
-    const isTP = (positionSide === 'LONG' && side === 'SELL') ||
-                 (positionSide === 'SHORT' && side === 'BUY');
+    const isTP =
+      (positionSide === "LONG" && side === "SELL") ||
+      (positionSide === "SHORT" && side === "BUY");
 
     if (isTP && !this.firstTPTaken[positionSide]) {
-      console.log(`\n[TP1] ${positionSide} @ ${price.toFixed(2)} → SL в безубыток`);
+      console.log(
+        `\n[TP1] ${positionSide} @ ${price.toFixed(2)} → SL в безубыток`
+      );
       this.firstTPTaken[positionSide] = true;
-      const opposite = positionSide === 'LONG' ? 'SHORT' : 'LONG';
-      await OrderManager.moveSLToBreakeven(this.symbol, opposite, this.entryPrice);
+      const opposite = positionSide === "LONG" ? "SHORT" : "LONG";
+      await OrderManager.moveSLToBreakeven(
+        this.symbol,
+        opposite,
+        this.entryPrice
+      );
     }
 
     // === ОБЕ ПОЗИЦИИ ЗАКРЫТЫ? → НОВЫЙ ЦИКЛ ===
     if (this.positionsClosed.LONG && this.positionsClosed.SHORT) {
-      console.log(`\n[ЦИКЛ ЗАВЕРШЁН] Обе позиции закрыты → новый вход через 1 сек...`);
+      console.log(
+        `\n[ЦИКЛ ЗАВЕРШЁН] Обе позиции закрыты → новый вход через 1 сек...`
+      );
       this.active = false;
       setTimeout(() => this.restartEntry(), 1000);
     }
@@ -122,7 +155,11 @@ class TradingBot {
 
   // === ВСПОМОГАТЕЛЬНЫЙ МЕТОД: получить позицию ===
   async getPosition(positionSide) {
-    const positions = await OrderManager.signedRequest('GET', '/fapi/v1/positionRisk', { symbol: this.symbol });
+    const positions = await OrderManager.signedRequest(
+      "GET",
+      "/fapi/v1/positionRisk",
+      { symbol: this.symbol }
+    );
     return positions.find(p => p.positionSide === positionSide);
   }
 
@@ -132,13 +169,21 @@ class TradingBot {
 
     if (price <= this.longSL) {
       console.log(`\n[STOP] LONG сработал → SL SHORT в безубыток`);
-      await OrderManager.moveSLToBreakeven(this.symbol, 'SHORT', this.entryPrice);
+      await OrderManager.moveSLToBreakeven(
+        this.symbol,
+        "SHORT",
+        this.entryPrice
+      );
       this.positionsClosed.LONG = true;
     }
 
     if (price >= this.shortSL) {
       console.log(`\n[STOP] SHORT сработал → SL LONG в безубыток`);
-      await OrderManager.moveSLToBreakeven(this.symbol, 'LONG', this.entryPrice);
+      await OrderManager.moveSLToBreakeven(
+        this.symbol,
+        "LONG",
+        this.entryPrice
+      );
       this.positionsClosed.SHORT = true;
     }
 
@@ -152,7 +197,7 @@ class TradingBot {
   async stop() {
     this.wsManager.stop();
     this.active = false;
-    console.log('Бот остановлен');
+    console.log("Бот остановлен");
   }
 }
 
