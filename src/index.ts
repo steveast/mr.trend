@@ -1,16 +1,13 @@
-import { run } from "./app";
+import { MrTrendBot } from "./bot/MrTrendBot";
+import "dotenv/config";
 
-async function main() {
-  run().catch(e => {
-    console.error(e);
-  });
-  process.on("SIGINT", async () => {
-    console.log("\nОстановка...");
-    process.exit(0);
-  });
-}
+const bot = new MrTrendBot();
 
-main().catch(err => {
-  console.error("Критическая ошибка:", err);
-  process.exit(1);
+bot.start();
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  console.log("Shutting down...");
+  bot.stop();
+  process.exit(0);
 });
