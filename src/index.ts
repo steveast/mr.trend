@@ -1,13 +1,12 @@
 import { MrTrendBot } from "./bot/MrTrendBot";
 import "dotenv/config";
 
-const bot = new MrTrendBot();
+const bot = new MrTrendBot(true); // true = Testnet
 
 bot.start();
 
-// Graceful shutdown
 process.on("SIGINT", async () => {
-  console.log("Shutting down...");
-  bot.stop();
+  console.log("\nShutting down...");
+  await bot.stop();
   process.exit(0);
 });

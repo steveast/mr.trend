@@ -1,43 +1,63 @@
-import { WebSocketManager } from "../services/WebSocketManager";
+// src/bot/MrTrendBot.ts
+
 import { BinanceClient } from "../services/BinanceClient";
 import { OrderManager } from "../services/OrderManager";
+import { UserDataStreamManager } from "../services/UserDataStreamManager";
+import { WebSocketManager } from "../services/WebSocketManager";
 import { GridDualStrategy } from "../strategies/GridDualStrategy";
 
 export class MrTrendBot {
   private ws: WebSocketManager;
+  private userStream: UserDataStreamManager;
   private orderManager: OrderManager;
   private strategy: GridDualStrategy;
-  private currentPrice: number = 0;
-  private entryTriggered: boolean = false;
+  private entryTriggered = false;
+  private cycleActive = false;
 
-  constructor() {
-    const binance = new BinanceClient(true);
-    this.orderManager = new OrderManager(binance.getClient());
+  constructor(testnet: boolean = true) {
+    const binance = new BinanceClient(testnet);
+    const client = binance.getClient();
+    this.orderManager = new OrderManager(client);
     this.strategy = new GridDualStrategy(this.orderManager);
-    this.ws = new WebSocketManager();
+    this.ws = new WebSocketManager(testnet);
+    this.userStream = new UserDataStreamManager(client, testnet);
+
+    // Перезапуск цикла
+    this.strategy.setOnCycleComplete(() => {
+      this.cycleActive = false;
+      this.entryTriggered = false;
+      console.log("Ready for new entry...");
+    });
   }
 
   async start() {
     console.log("MrTrend Bot Starting...");
 
+    // Запуск WebSocket цены
     this.ws.on("price", async (price: number) => {
-      this.currentPrice = price;
-
-      // Вход по первому касанию (пример: при пересечении 110400)
-      if (!this.entryTriggered && price <= 110400) {
+      if (!this.entryTriggered && !this.cycleActive && price <= 110400.1) {
         this.entryTriggered = true;
-        console.log(`Entry triggered at ${price}`);
+        this.cycleActive = true;
+        console.log(`New cycle: Entry at ${price.toFixed(2)}`);
         await this.strategy.start(price);
       }
+    });
 
-      // Мониторинг стопов и тейков (в реальном времени — через Binance API)
-      // Здесь упрощённо — в проде: слушать user data stream
+    // Запуск User Data Stream
+    this.userStream.on("orderFilled", async order => {
+      if (this.cycleActive) {
+        await this.strategy.handleOrderFilled(order);
+      }
     });
 
     this.ws.start("BTCUSDT");
+    await this.userStream.start();
   }
 
-  stop() {
+  async stop() {
     this.ws.stop();
+    this.userStream.stop();
+    await this.strategy.reset();
+    console.log("Bot stopped");
   }
 }
