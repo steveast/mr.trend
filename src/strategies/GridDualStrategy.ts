@@ -34,14 +34,15 @@ export class GridDualStrategy {
   }
 
   async start(entryPrice: number): Promise<any> {
-    await this.orderManager.ensureHedgeMode();
     Object.assign(this.pos, await this.orderManager.getPosition());
-    console.log("this.pos 1", this.pos.longAmt);
+
     if (this.pos.long || this.pos.short) {
       console.log("Позиция уже существует, ожидание 1 минута...");
       await new Promise(r => setTimeout(r, 60000));
       return this.start(entryPrice);
     }
+
+    await this.orderManager.ensureHedgeMode();
 
     const stopDistance = entryPrice * 0.02;
     const tpStep = stopDistance / 10;
@@ -73,6 +74,7 @@ export class GridDualStrategy {
 
     // ШАГ 1: ОТКРЫВАЕМ ПОЗИЦИИ
     await this.openPositions();
+    Object.assign(this.pos, await this.orderManager.getPosition());
 
     await new Promise(res => setTimeout(res, 200));
 
@@ -112,91 +114,86 @@ export class GridDualStrategy {
     if (!this.long || !this.short) return;
 
     // собираем ордера в массив
-    const orders: Promise<any>[] = [];
-
-    console.log("this.pos 2", this.pos.longAmt);
+    const orders: (() => Promise<any>)[] = [];
 
     if (this.pos.long && this.pos.longAmt > 0) {
-      orders.push(
+      orders.push(() =>
         this.orderManager.placeOrder({
           symbol: this.symbol,
           side: "SELL",
           type: "STOP_MARKET",
           quantity: this.pos.longAmt,
           positionSide: "LONG",
-          stopPrice: this.long.stop,
+          stopPrice: this.long!.stop,
         })
       );
     }
 
     if (this.pos.short && this.pos.shortAmt < 0) {
-      orders.push(
+      orders.push(() =>
         this.orderManager.placeOrder({
           symbol: this.symbol,
           side: "BUY",
           type: "STOP_MARKET",
           quantity: Math.abs(this.pos.shortAmt),
           positionSide: "SHORT",
-          stopPrice: this.short.stop,
+          stopPrice: this.short!.stop,
         })
       );
     }
+
     // === 9 частичных тейков ===
-    // for (let i = 0; i < 9; i++) {
-    //   const qty = this.quantity / 10;
-    //   // console.log(`Partial TP ${i + 1}: qty=${qty}`);
+    for (let i = 0; i < 9; i++) {
+      const qty = this.quantity / 10;
+      // LONG TP
+      orders.push(() =>
+        this.orderManager.placeOrder({
+          symbol: this.symbol,
+          side: "SELL",
+          type: "TAKE_PROFIT_MARKET",
+          quantity: qty,
+          stopPrice: this.long!.takeProfits[i],
+          positionSide: "LONG",
+        })
+      );
 
-    //   // LONG TP
-    //   allOrders.push(
-    //     this.orderManager.placeOrder({
-    //       symbol: this.symbol,
-    //       side: "SELL",
-    //       type: "TAKE_PROFIT_MARKET",
-    //       quantity: qty,
-    //       stopPrice: this.long.takeProfits[i],
-    //       positionSide: "LONG",
-    //     })
-    //   );
+      // SHORT TP
+      orders.push(() =>
+        this.orderManager.placeOrder({
+          symbol: this.symbol,
+          side: "BUY",
+          type: "TAKE_PROFIT_MARKET",
+          quantity: qty,
+          stopPrice: this.short!.takeProfits[i],
+          positionSide: "SHORT",
+        })
+      );
+    }
 
-    //   // SHORT TP
-    //   allOrders.push(
-    //     this.orderManager.placeOrder({
-    //       symbol: this.symbol,
-    //       side: "BUY",
-    //       type: "TAKE_PROFIT_MARKET",
-    //       quantity: qty,
-    //       stopPrice: this.short.takeProfits[i],
-    //       positionSide: "SHORT",
-    //     })
-    //   );
-    // }
+    // === Последний тейк (финальный) ===
+    orders.push(() =>
+      this.orderManager.placeOrder({
+        symbol: this.symbol,
+        side: "SELL",
+        type: "TAKE_PROFIT_MARKET",
+        quantity: this.quantity,
+        stopPrice: this.long!.takeProfits[9],
+        positionSide: "LONG",
+      })
+    );
 
-    // // === Последний тейк (финальный) ===
-    // allOrders.push(
-    //   this.orderManager.placeOrder({
-    //     symbol: this.symbol,
-    //     side: "SELL",
-    //     type: "TAKE_PROFIT_MARKET",
-    //     quantity: this.quantity,
-    //     stopPrice: this.long.takeProfits[9],
-    //     positionSide: "LONG",
-    //   })
-    // );
+    orders.push(() =>
+      this.orderManager.placeOrder({
+        symbol: this.symbol,
+        side: "BUY",
+        type: "TAKE_PROFIT_MARKET",
+        quantity: this.quantity,
+        stopPrice: this.short!.takeProfits[9],
+        positionSide: "SHORT",
+      })
+    );
 
-    // allOrders.push(
-    //   this.orderManager.placeOrder({
-    //     symbol: this.symbol,
-    //     side: "BUY",
-    //     type: "TAKE_PROFIT_MARKET",
-    //     quantity: this.quantity,
-    //     stopPrice: this.short.takeProfits[9],
-    //     positionSide: "SHORT",
-    //   })
-    // );
-
-    console.log("orders", orders);
-    await Promise.all(orders);
-
+    await Promise.all(orders.map(fn => fn()));
     console.log("Все тейки выставлены!");
   }
 
