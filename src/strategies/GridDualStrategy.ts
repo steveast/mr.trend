@@ -45,7 +45,7 @@ export class GridDualStrategy {
 
     await this.orderManager.ensureHedgeMode();
 
-    const stopDistance = entryPrice * 0.02;
+    const stopDistance = entryPrice * 0.002;
     const tpStep = stopDistance / 10;
 
     this.long = {
