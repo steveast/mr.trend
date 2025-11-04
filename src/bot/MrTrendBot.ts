@@ -6,6 +6,7 @@ import { OrderManager } from "../services/OrderManager";
 import { UserDataStreamManager } from "../services/UserDataStreamManager";
 import { WebSocketManager } from "../services/WebSocketManager";
 import { GridDualStrategy } from "../strategies/GridDualStrategy";
+import { roundToFixed } from "../utils/roundToFixed";
 
 export class MrTrendBot {
   private ws: WebSocketManager;
@@ -36,11 +37,11 @@ export class MrTrendBot {
 
     // Запуск WebSocket цены
     this.ws.on("price", async (priceSource: number) => {
-      const price = +priceSource.toFixed(2);
+      const price = roundToFixed(priceSource, 2);
       if (!this.entryTriggered && !this.cycleActive) {
         this.entryTriggered = true;
         this.cycleActive = true;
-        console.log(`New cycle: Entry at ${price.toFixed(2)}`);
+        console.log(`New cycle: Entry at ${price}`);
         await this.strategy.start(price);
       }
     });

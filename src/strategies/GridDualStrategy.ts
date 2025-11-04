@@ -1,5 +1,6 @@
 import { IPosition, OrderManager } from "../services/OrderManager";
 import { OrderResult } from "binance";
+import { roundToFixed } from "../utils/roundToFixed";
 
 interface Position {
   entry: number;
@@ -49,8 +50,8 @@ export class GridDualStrategy {
 
     this.long = {
       entry: entryPrice,
-      stop: +(entryPrice - stopDistance).toFixed(2),
-      takeProfits: Array.from({ length: 10 }, (_, i) => +(entryPrice + stopDistance + tpStep * (i + 1)).toFixed(2)),
+      stop: roundToFixed(entryPrice - stopDistance, 2),
+      takeProfits: Array.from({ length: 10 }, (_, i) => roundToFixed(entryPrice + stopDistance + tpStep * (i + 1), 2)),
       side: "LONG",
       positionSide: "LONG",
       active: true,
@@ -61,7 +62,7 @@ export class GridDualStrategy {
     this.short = {
       entry: entryPrice,
       stop: entryPrice + stopDistance,
-      takeProfits: Array.from({ length: 10 }, (_, i) => +(entryPrice - stopDistance - tpStep * (i + 1)).toFixed(2)),
+      takeProfits: Array.from({ length: 10 }, (_, i) => roundToFixed(entryPrice - stopDistance - tpStep * (i + 1), 2)),
       side: "SHORT",
       positionSide: "SHORT",
       active: true,

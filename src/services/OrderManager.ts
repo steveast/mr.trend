@@ -1,4 +1,5 @@
 import { FuturesPositionV3, NewFuturesOrderParams, USDMClient } from "binance";
+import { roundToFixed } from "../utils/roundToFixed";
 
 export interface OrderParams {
   symbol: string;
@@ -31,9 +32,9 @@ export class OrderManager {
           side: params.side,
           type: params.type,
           positionSide: params.positionSide,
-          quantity: this.roundToFixed(params.quantity, 3),
-          price: this.roundToFixed(params.price, 1),
-          stopPrice: this.roundToFixed(params.stopPrice, 1),
+          quantity: params.quantity ? roundToFixed(params.quantity, 3) : undefined,
+          price: params.price ? roundToFixed(params.price, 1) : undefined,
+          stopPrice: params.stopPrice ? roundToFixed(params.stopPrice, 1) : undefined,
           timeInForce: params.timeInForce,
           closePosition: params.closePosition,
         } as any).filter(([_, v]) => v !== undefined)
@@ -96,12 +97,5 @@ export class OrderManager {
         console.error("Ошибка hedge mode:", message);
       }
     }
-  }
-
-  roundToFixed(value: number | undefined, decimals = 0) {
-    if (value == null || isNaN(value)) return value;
-    const factor = 10 ** decimals;
-    const rounded = Math.round(value * factor) / factor;
-    return rounded.toFixed(decimals);
   }
 }
