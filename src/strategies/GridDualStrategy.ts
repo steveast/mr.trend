@@ -114,6 +114,7 @@ export class GridDualStrategy {
     if (!this.long || !this.short) return;
 
     // собираем ордера в массив
+    const qty = this.quantity / 10;
     const orders: (() => Promise<any>)[] = [];
 
     if (this.pos.long && this.pos.longAmt > 0) {
@@ -142,18 +143,19 @@ export class GridDualStrategy {
       );
     }
 
-    // === 9 частичных тейков ===
-    for (let i = 0; i < 9; i++) {
-      const qty = this.quantity / 10;
+    for (let i = 0; i < 10; i++) {
       // LONG TP
       orders.push(() =>
         this.orderManager.placeOrder({
           symbol: this.symbol,
           side: "SELL",
-          type: "TAKE_PROFIT_MARKET",
+          type: i === 9 ? "TAKE_PROFIT_MARKET" : "LIMIT",
           quantity: qty,
-          stopPrice: this.long!.takeProfits[i],
+          price: this.long!.takeProfits[i],
+          stopPrice: i === 9 ? this.long!.takeProfits[i] : undefined,
           positionSide: "LONG",
+          timeInForce: "GTC",
+          closePosition: String(i === 9) as any,
         })
       );
 
@@ -162,36 +164,16 @@ export class GridDualStrategy {
         this.orderManager.placeOrder({
           symbol: this.symbol,
           side: "BUY",
-          type: "TAKE_PROFIT_MARKET",
+          type: i === 9 ? "TAKE_PROFIT_MARKET" : "LIMIT",
           quantity: qty,
-          stopPrice: this.short!.takeProfits[i],
+          price: this.short!.takeProfits[i],
+          stopPrice: i === 9 ? this.short!.takeProfits[i] : undefined,
           positionSide: "SHORT",
+          timeInForce: "GTC",
+          closePosition: String(i === 9) as any,
         })
       );
     }
-
-    // === Последний тейк (финальный) ===
-    orders.push(() =>
-      this.orderManager.placeOrder({
-        symbol: this.symbol,
-        side: "SELL",
-        type: "TAKE_PROFIT_MARKET",
-        quantity: this.quantity,
-        stopPrice: this.long!.takeProfits[9],
-        positionSide: "LONG",
-      })
-    );
-
-    orders.push(() =>
-      this.orderManager.placeOrder({
-        symbol: this.symbol,
-        side: "BUY",
-        type: "TAKE_PROFIT_MARKET",
-        quantity: this.quantity,
-        stopPrice: this.short!.takeProfits[9],
-        positionSide: "SHORT",
-      })
-    );
 
     await Promise.all(orders.map(fn => fn()));
     console.log("Все тейки выставлены!");
@@ -267,7 +249,7 @@ export class GridDualStrategy {
   }
 
   async reset() {
-    await this.orderManager.cancelAll(this.symbol);
+    // await this.orderManager.cancelAll(this.symbol);
     this.long = null;
     this.short = null;
     console.log("Strategy reset");

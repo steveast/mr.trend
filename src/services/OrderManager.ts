@@ -1,9 +1,9 @@
-import { FuturesPositionV3, USDMClient } from "binance";
+import { FuturesPositionV3, NewFuturesOrderParams, USDMClient } from "binance";
 
 export interface OrderParams {
   symbol: string;
   side: "BUY" | "SELL";
-  type: "MARKET" | "LIMIT" | "STOP_MARKET" | "TAKE_PROFIT_MARKET";
+  type: "MARKET" | "LIMIT" | "STOP_MARKET" | "TAKE_PROFIT_MARKET" | "TAKE_PROFIT";
   quantity: number;
   price?: number;
   positionSide?: "SHORT" | "LONG";
@@ -23,7 +23,7 @@ export class OrderManager {
 
   constructor(public client: USDMClient) {}
 
-  async placeOrder(params: OrderParams) {
+  async placeOrder(params: NewFuturesOrderParams<number>) {
     try {
       const fullOrderProps: any = Object.fromEntries(
         Object.entries({
@@ -31,10 +31,11 @@ export class OrderManager {
           side: params.side,
           type: params.type,
           positionSide: params.positionSide,
-          quantity: params.quantity.toFixed(3),
-          price: params.price?.toFixed(2),
-          stopPrice: params.stopPrice?.toFixed(2),
-          // timeInForce: params.timeInForce || "GTC",
+          quantity: this.roundToFixed(params.quantity, 3),
+          price: this.roundToFixed(params.price, 1),
+          stopPrice: this.roundToFixed(params.stopPrice, 1),
+          timeInForce: params.timeInForce,
+          closePosition: params.closePosition,
         } as any).filter(([_, v]) => v !== undefined)
       );
 
@@ -54,13 +55,13 @@ export class OrderManager {
     }
   }
 
-  async cancelAll(symbol: string) {
-    try {
-      await this.client.cancelAllOpenOrders({ symbol });
-    } catch (error: any) {
-      console.error("Cancel error:", error.body?.msg || error.message);
-    }
-  }
+  // async cancelAll(symbol: string) {
+  //   try {
+  //     await this.client.cancelAllOpenOrders({ symbol });
+  //   } catch (error: any) {
+  //     console.error("Cancel error:", error.body?.msg || error.message);
+  //   }
+  // }
 
   async getPosition() {
     const positions = await this.client.getPositionsV3();
@@ -95,5 +96,12 @@ export class OrderManager {
         console.error("Ошибка hedge mode:", message);
       }
     }
+  }
+
+  roundToFixed(value: number | undefined, decimals = 0) {
+    if (value == null || isNaN(value)) return value;
+    const factor = 10 ** decimals;
+    const rounded = Math.round(value * factor) / factor;
+    return rounded.toFixed(decimals);
   }
 }
