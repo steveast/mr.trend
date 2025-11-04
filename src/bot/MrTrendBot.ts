@@ -1,11 +1,11 @@
 // src/bot/MrTrendBot.ts
 
+import { OrderResult } from "binance";
 import { BinanceClient } from "../services/BinanceClient";
 import { OrderManager } from "../services/OrderManager";
 import { UserDataStreamManager } from "../services/UserDataStreamManager";
 import { WebSocketManager } from "../services/WebSocketManager";
 import { GridDualStrategy } from "../strategies/GridDualStrategy";
-import { IRealOrder } from "./types";
 
 export class MrTrendBot {
   private ws: WebSocketManager;
@@ -46,7 +46,7 @@ export class MrTrendBot {
     });
 
     // Запуск User Data Stream
-    this.userStream.on("orderFilled", async (order: IRealOrder) => {
+    this.userStream.on("orderFilled", async (order: OrderResult) => {
       if (this.cycleActive) {
         await this.strategy.handleOrderFilled(order);
       }

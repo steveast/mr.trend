@@ -1,4 +1,4 @@
-import { USDMClient } from "binance";
+import { FuturesPositionV3, USDMClient } from "binance";
 
 export interface OrderParams {
   symbol: string;
@@ -9,6 +9,13 @@ export interface OrderParams {
   positionSide?: "SHORT" | "LONG";
   stopPrice?: number;
   timeInForce?: "GTC" | "IOC" | "FOK";
+}
+
+export interface IPosition {
+  long: undefined | FuturesPositionV3;
+  short: undefined | FuturesPositionV3;
+  longAmt: number;
+  shortAmt: number;
 }
 
 export class OrderManager {
@@ -59,14 +66,14 @@ export class OrderManager {
     const positions = await this.client.getPositionsV3();
     const symbolPositions = positions.filter(p => p.symbol === this.symbol);
 
-    const longPos = symbolPositions.find(p => p.positionSide === "LONG");
-    const shortPos = symbolPositions.find(p => p.positionSide === "SHORT");
-    const longAmt = parseFloat((longPos?.positionAmt as any) || "0");
-    const shortAmt = parseFloat((shortPos?.positionAmt as any) || "0");
+    const long = symbolPositions.find(p => p.positionSide === "LONG");
+    const short = symbolPositions.find(p => p.positionSide === "SHORT");
+    const longAmt = parseFloat((long?.positionAmt as any) || "0");
+    const shortAmt = parseFloat((short?.positionAmt as any) || "0");
 
     return {
-      longPos,
-      shortPos,
+      long,
+      short,
       longAmt,
       shortAmt,
     };

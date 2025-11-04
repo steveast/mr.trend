@@ -38,7 +38,7 @@ export class UserDataStreamManager extends EventEmitter {
               type: order.type,
               price: parseFloat(order.lastFilledPrice || order.price || "0"),
               qty: parseFloat(order.lastFilledQuantity || order.quantity || "0"),
-              ...order,
+              // ...order,
             });
           }
         }

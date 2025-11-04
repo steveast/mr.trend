@@ -1,6 +1,5 @@
-import { FuturesPositionV3 } from "binance";
-import { OrderManager } from "../services/OrderManager";
-import { IRealOrder } from "../bot/types";
+import { IPosition, OrderManager } from "../services/OrderManager";
+import { OrderResult } from "binance";
 
 interface Position {
   entry: number;
@@ -13,13 +12,6 @@ interface Position {
   closed: boolean;
 }
 
-interface IRealPosition {
-  longPos: undefined | FuturesPositionV3;
-  shortPos: undefined | FuturesPositionV3;
-  longAmt: number;
-  shortAmt: number;
-}
-
 export class GridDualStrategy {
   private long: Position | null = null;
   private short: Position | null = null;
@@ -28,9 +20,9 @@ export class GridDualStrategy {
   private onCycleComplete?: () => void;
 
   // position
-  private pos: IRealPosition = {
-    longPos: undefined,
-    shortPos: undefined,
+  private pos: IPosition = {
+    long: undefined,
+    short: undefined,
     longAmt: 0,
     shortAmt: 0,
   };
@@ -44,8 +36,8 @@ export class GridDualStrategy {
   async start(entryPrice: number): Promise<any> {
     await this.orderManager.ensureHedgeMode();
     Object.assign(this.pos, await this.orderManager.getPosition());
-
-    if (this.pos.longPos || this.pos.shortPos) {
+    console.log("this.pos 1", this.pos.longAmt);
+    if (this.pos.long || this.pos.short) {
       console.log("Позиция уже существует, ожидание 1 минута...");
       await new Promise(r => setTimeout(r, 60000));
       return this.start(entryPrice);
@@ -122,39 +114,33 @@ export class GridDualStrategy {
     // собираем ордера в массив
     const orders: Promise<any>[] = [];
 
-    // if (this.longPos && this.longAmt > 0) {
-    //   orders.push(
-    //     this.orderManager.placeOrder({
-    //       symbol: this.symbol,
-    //       side: "SELL",
-    //       type: "STOP_MARKET",
-    //       quantity: this.longAmt,
-    //       positionSide: "LONG",
-    //       stopPrice: this.long.stop,
-    //     })
-    //   );
-    // }
+    console.log("this.pos 2", this.pos.longAmt);
 
-    // if (this.shortPos && this.shortAmt < 0) {
-    //   orders.push(
-    //     this.orderManager.placeOrder({
-    //       symbol: this.symbol,
-    //       side: "BUY",
-    //       type: "STOP_MARKET",
-    //       quantity: Math.abs(this.shortAmt),
-    //       positionSide: "SHORT",
-    //       stopPrice: this.short.stop,
-    //     })
-    //   );
-    // }
+    if (this.pos.long && this.pos.longAmt > 0) {
+      orders.push(
+        this.orderManager.placeOrder({
+          symbol: this.symbol,
+          side: "SELL",
+          type: "STOP_MARKET",
+          quantity: this.pos.longAmt,
+          positionSide: "LONG",
+          stopPrice: this.long.stop,
+        })
+      );
+    }
 
-    // отправляем все ордера одновременно
-    await Promise.all(orders);
-
-    console.log("STOP_MARKET ордера установлены одновременно");
-
-    const allOrders: Promise<any>[] = [];
-
+    if (this.pos.short && this.pos.shortAmt < 0) {
+      orders.push(
+        this.orderManager.placeOrder({
+          symbol: this.symbol,
+          side: "BUY",
+          type: "STOP_MARKET",
+          quantity: Math.abs(this.pos.shortAmt),
+          positionSide: "SHORT",
+          stopPrice: this.short.stop,
+        })
+      );
+    }
     // === 9 частичных тейков ===
     // for (let i = 0; i < 9; i++) {
     //   const qty = this.quantity / 10;
@@ -208,13 +194,13 @@ export class GridDualStrategy {
     //   })
     // );
 
-    // Отправляем все тейки одновременно
-    // await Promise.all(allOrders);
+    console.log("orders", orders);
+    await Promise.all(orders);
 
-    console.log("Все тейки (частичные + финальные) выставлены одновременно");
+    console.log("Все тейки выставлены!");
   }
 
-  async handleOrderFilled(order: IRealOrder) {
+  async handleOrderFilled(order: OrderResult) {
     if (!this.long || !this.short) return;
     console.log("Order filled", order);
 
@@ -237,11 +223,11 @@ export class GridDualStrategy {
     }
 
     if (order.type === "TAKE_PROFIT_MARKET") {
-      if (isLong && order.price >= this.long.takeProfits[0] && !this.long.takeProfitTriggered) {
+      if (isLong && Number(order.price) >= this.long.takeProfits[0] && !this.long.takeProfitTriggered) {
         this.long.takeProfitTriggered = true;
         await this.moveStopToBreakeven("LONG");
       }
-      if (isShort && order.price <= this.short.takeProfits[0] && !this.short.takeProfitTriggered) {
+      if (isShort && Number(order.price) <= this.short.takeProfits[0] && !this.short.takeProfitTriggered) {
         this.short.takeProfitTriggered = true;
         await this.moveStopToBreakeven("SHORT");
       }
