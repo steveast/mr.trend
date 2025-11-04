@@ -14,9 +14,7 @@ export class UserDataStreamManager extends EventEmitter {
     testnet: boolean = true
   ) {
     super();
-    const wsUrl = testnet
-      ? "wss://stream.binancefuture.com"
-      : "wss://fstream.binance.com";
+    const wsUrl = testnet ? "wss://stream.binancefuture.com" : "wss://fstream.binance.com";
     this.ws = new WebsocketClient({
       wsUrl,
       beautify: testnet,
@@ -33,19 +31,13 @@ export class UserDataStreamManager extends EventEmitter {
       this.ws!.on("formattedMessage", (data: any) => {
         if (data.eventType === "ORDER_TRADE_UPDATE") {
           const order = data.order;
-          if (
-            order.executionType === "TRADE" &&
-            order.orderStatus === "FILLED"
-          ) {
+          if (order.executionType === "TRADE" && order.orderStatus === "FILLED") {
             this.emit("orderFilled", {
               symbol: order.symbol,
               side: order.side,
               type: order.type,
               price: parseFloat(order.lastFilledPrice || order.price || "0"),
-              qty: parseFloat(
-                order.lastFilledQuantity || order.quantity || "0"
-              ),
-              reduceOnly: order.reduceOnly,
+              qty: parseFloat(order.lastFilledQuantity || order.quantity || "0"),
             });
           }
         }

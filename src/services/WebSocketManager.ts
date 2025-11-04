@@ -8,9 +8,7 @@ export class WebSocketManager extends EventEmitter {
 
   constructor(testnet: boolean = true) {
     super();
-    const wsUrl = testnet
-      ? "wss://stream.binancefuture.com"
-      : "wss://fstream.binance.com";
+    const wsUrl = testnet ? "wss://stream.binancefuture.com" : "wss://fstream.binance.com";
     this.wsClient = new WebsocketClient({
       wsUrl,
       beautify: testnet,
@@ -21,9 +19,7 @@ export class WebSocketManager extends EventEmitter {
 
     // Подключаемся к событиям
     this.wsClient.on("open", () => console.log("WebSocket connected"));
-    this.wsClient.on("reconnecting", () =>
-      console.log("WebSocket reconnecting")
-    );
+    this.wsClient.on("reconnecting", () => console.log("WebSocket reconnecting"));
     this.wsClient.on("reconnected", () => console.log("WebSocket reconnected"));
 
     // ОШИБКИ — только через formattedMessage

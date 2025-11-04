@@ -5,6 +5,7 @@ interface Position {
   stop: number;
   takeProfits: number[];
   side: "LONG" | "SHORT";
+  positionSide: "LONG" | "SHORT";
   active: boolean;
   takeProfitTriggered: boolean;
   closed: boolean;
@@ -30,11 +31,9 @@ export class GridDualStrategy {
     this.long = {
       entry: entryPrice,
       stop: +(entryPrice - stopDistance).toFixed(2),
-      takeProfits: Array.from(
-        { length: 10 },
-        (_, i) => +(entryPrice + stopDistance + tpStep * (i + 1)).toFixed(2)
-      ),
+      takeProfits: Array.from({ length: 10 }, (_, i) => +(entryPrice + stopDistance + tpStep * (i + 1)).toFixed(2)),
       side: "LONG",
+      positionSide: "LONG",
       active: true,
       takeProfitTriggered: false,
       closed: false,
@@ -43,11 +42,9 @@ export class GridDualStrategy {
     this.short = {
       entry: entryPrice,
       stop: entryPrice + stopDistance,
-      takeProfits: Array.from(
-        { length: 10 },
-        (_, i) => +(entryPrice - stopDistance - tpStep * (i + 1)).toFixed(2)
-      ),
+      takeProfits: Array.from({ length: 10 }, (_, i) => +(entryPrice - stopDistance - tpStep * (i + 1)).toFixed(2)),
       side: "SHORT",
+      positionSide: "SHORT",
       active: true,
       takeProfitTriggered: false,
       closed: false,
@@ -93,13 +90,7 @@ export class GridDualStrategy {
   private async placeInitialOrders() {
     if (!this.long || !this.short) return;
 
-    const positions = await this.orderManager.client.getPositionsV3(); // возвращает массив всех позиций
-    const symbolPositions = positions.filter(p => p.symbol === this.symbol);
-
-    const longPos = symbolPositions.find(p => p.positionSide === "LONG");
-    const shortPos = symbolPositions.find(p => p.positionSide === "SHORT");
-    const longAmt = parseFloat((longPos?.positionAmt as any) || "0");
-    const shortAmt = parseFloat((shortPos?.positionAmt as any) || "0");
+    const { longPos, longAmt, shortPos, shortAmt } = await this.orderManager.getPosition();
 
     // собираем ордера в массив
     const orders: Promise<any>[] = [];
@@ -218,19 +209,11 @@ export class GridDualStrategy {
     }
 
     if (order.type === "TAKE_PROFIT_MARKET") {
-      if (
-        isLong &&
-        order.price >= this.long.takeProfits[0] &&
-        !this.long.takeProfitTriggered
-      ) {
+      if (isLong && order.price >= this.long.takeProfits[0] && !this.long.takeProfitTriggered) {
         this.long.takeProfitTriggered = true;
         await this.moveStopToBreakeven("LONG");
       }
-      if (
-        isShort &&
-        order.price <= this.short.takeProfits[0] &&
-        !this.short.takeProfitTriggered
-      ) {
+      if (isShort && order.price <= this.short.takeProfits[0] && !this.short.takeProfitTriggered) {
         this.short.takeProfitTriggered = true;
         await this.moveStopToBreakeven("SHORT");
       }

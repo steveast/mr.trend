@@ -9,7 +9,6 @@ export interface OrderParams {
   positionSide?: "SHORT" | "LONG";
   stopPrice?: number;
   timeInForce?: "GTC" | "IOC" | "FOK";
-  reduceOnly?: boolean;
 }
 
 export class OrderManager {
@@ -24,19 +23,15 @@ export class OrderManager {
           symbol: params.symbol,
           side: params.side,
           type: params.type,
-          positionSide: params.side === "SELL" ? "SHORT" : "LONG",
+          positionSide: params.positionSide,
           quantity: params.quantity.toFixed(3),
           price: params.price?.toFixed(2),
           stopPrice: params.stopPrice?.toFixed(2),
           // timeInForce: params.timeInForce || "GTC",
-          reduceOnly: params.reduceOnly,
         } as any).filter(([_, v]) => v !== undefined)
       );
 
-      if (
-        params.type === "STOP_MARKET" ||
-        params.type === "TAKE_PROFIT_MARKET"
-      ) {
+      if (params.type === "STOP_MARKET" || params.type === "TAKE_PROFIT_MARKET") {
         delete fullOrderProps.price;
         delete fullOrderProps.timeInForce;
       }
@@ -44,9 +39,7 @@ export class OrderManager {
 
       const response = await this.client.submitNewOrder(fullOrderProps);
 
-      console.log(
-        `Order placed: ${params.side} ${params.type} @ ${params.price || params.stopPrice}`
-      );
+      console.log(`Order placed: ${params.side} ${params.type} @ ${params.price || params.stopPrice}`);
       return response;
     } catch (error: any) {
       console.error("Order error:", error.body?.msg || error.message);
