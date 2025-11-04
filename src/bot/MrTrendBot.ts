@@ -5,6 +5,7 @@ import { OrderManager } from "../services/OrderManager";
 import { UserDataStreamManager } from "../services/UserDataStreamManager";
 import { WebSocketManager } from "../services/WebSocketManager";
 import { GridDualStrategy } from "../strategies/GridDualStrategy";
+import { IRealOrder } from "./types";
 
 export class MrTrendBot {
   private ws: WebSocketManager;
@@ -45,7 +46,7 @@ export class MrTrendBot {
     });
 
     // Запуск User Data Stream
-    this.userStream.on("orderFilled", async order => {
+    this.userStream.on("orderFilled", async (order: IRealOrder) => {
       if (this.cycleActive) {
         await this.strategy.handleOrderFilled(order);
       }

@@ -39,7 +39,7 @@ export class OrderManager {
 
       const response = await this.client.submitNewOrder(fullOrderProps);
 
-      console.log(`Order placed: ${params.side} ${params.type} @ ${params.price || params.stopPrice}`);
+      console.log(`Order placed: ${params.side} ${params.type} @ ${params.price || params.quantity}`);
       return response;
     } catch (error: any) {
       console.error("Order error:", error.body?.msg || error.message);
