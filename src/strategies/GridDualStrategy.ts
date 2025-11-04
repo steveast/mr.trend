@@ -1,3 +1,4 @@
+import { FuturesPositionV3 } from "binance";
 import { OrderManager } from "../services/OrderManager";
 
 interface Position {
@@ -18,6 +19,12 @@ export class GridDualStrategy {
   private quantity = 0.01;
   private onCycleComplete?: () => void;
 
+  // position
+  private longPos?: FuturesPositionV3;
+  private shortPos?: FuturesPositionV3;
+  private longAmt: number = 0;
+  private shortAmt: number = 0;
+
   constructor(private orderManager: OrderManager) {}
 
   setOnCycleComplete(callback: () => void) {
@@ -25,6 +32,14 @@ export class GridDualStrategy {
   }
 
   async start(entryPrice: number) {
+    await this.orderManager.ensureHedgeMode();
+    Object.assign(this, await this.orderManager.getPosition());
+
+    if (this.longPos || this.shortPos) {
+      await new Promise(r => setTimeout(r, 60000));
+      throw new Error("Позиция уже открыта");
+    }
+
     const stopDistance = entryPrice * 0.02;
     const tpStep = stopDistance / 10;
 
@@ -90,31 +105,29 @@ export class GridDualStrategy {
   private async placeInitialOrders() {
     if (!this.long || !this.short) return;
 
-    const { longPos, longAmt, shortPos, shortAmt } = await this.orderManager.getPosition();
-
     // собираем ордера в массив
     const orders: Promise<any>[] = [];
 
-    if (longPos && longAmt > 0) {
+    if (this.longPos && this.longAmt > 0) {
       orders.push(
         this.orderManager.placeOrder({
           symbol: this.symbol,
           side: "SELL",
           type: "STOP_MARKET",
-          quantity: longAmt,
+          quantity: this.longAmt,
           positionSide: "LONG",
           stopPrice: this.long.stop,
         })
       );
     }
 
-    if (shortPos && shortAmt < 0) {
+    if (this.shortPos && this.shortAmt < 0) {
       orders.push(
         this.orderManager.placeOrder({
           symbol: this.symbol,
           side: "BUY",
           type: "STOP_MARKET",
-          quantity: Math.abs(shortAmt),
+          quantity: Math.abs(this.shortAmt),
           positionSide: "SHORT",
           stopPrice: this.short.stop,
         })
@@ -189,6 +202,7 @@ export class GridDualStrategy {
 
   async handleOrderFilled(order: any) {
     if (!this.long || !this.short) return;
+    console.log("Order filled", order);
 
     const isLong = order.side === "SELL";
     const isShort = order.side === "BUY";

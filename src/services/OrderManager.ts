@@ -71,4 +71,22 @@ export class OrderManager {
       shortAmt,
     };
   }
+
+  async ensureHedgeMode() {
+    try {
+      const res = await this.client.setPositionMode({ dualSidePosition: "true" }); // boolean, а не "true"
+
+      if (res && res.msg === "success") {
+        console.log("✅ Hedge mode включён");
+      } else {
+        console.log("❌ Не удалось включить Hedge mode:", res);
+      }
+    } catch ({ code, message }: any) {
+      if (code === -4059) {
+        console.log("Hedge mode уже активен");
+      } else {
+        console.error("Ошибка hedge mode:", message);
+      }
+    }
+  }
 }
