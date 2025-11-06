@@ -191,10 +191,11 @@ export class GridDualStrategy {
     console.log('ORDER FILLED', order);
     if (!this.long || !this.short) return;
 
+    const isPos = Boolean(this.pos.long && this.pos.short);
     const isLong = order.side === "SELL";
     const isShort = order.side === "BUY";
 
-    if (order.type === "STOP_MARKET") {
+    if (order.type === "MARKET" && isPos) {
       if (isLong && this.long.active) {
         this.long.closed = true;
         this.long.active = false;
@@ -209,7 +210,7 @@ export class GridDualStrategy {
       }
     }
 
-    if (order.type === "LIMIT") {
+    if (order.type === "LIMIT" && isPos) {
       if (isLong && !this.long.takeProfitTriggered) {
         this.long.takeProfitTriggered = true;
         await this.moveStopToBreakeven("LONG");

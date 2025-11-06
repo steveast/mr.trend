@@ -14,11 +14,10 @@ export class UserDataStreamManager extends EventEmitter {
     testnet: boolean = true
   ) {
     super();
-    const wsUrl = testnet ? "wss://stream.binancefuture.com" : "wss://fstream.binance.com";
     this.ws = new WebsocketClient({
-      wsUrl,
+      wsUrl: testnet ? "wss://stream.binancefuture.com" : "wss://fstream.binance.com",
       beautify: testnet,
-      api_key: process.env.API_KEY,
+      api_key: process.env.API_KEY, 
       api_secret: process.env.API_SECRET,
       testnet,
     });
