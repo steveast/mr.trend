@@ -89,26 +89,27 @@ export class GridDualStrategy {
 
     console.log(`Opening LONG at market (${this.quantity} BTC)`);
     console.log(`Opening SHORT at market (${this.quantity} BTC)`);
-
-    // Отправляем оба ордера одновременно
-    await Promise.all([
-      this.orderManager.placeOrder({
-        symbol: this.symbol,
-        side: "BUY",
-        positionSide: "LONG",
-        type: "MARKET",
-        quantity: this.quantity,
-      }),
-      this.orderManager.placeOrder({
-        symbol: this.symbol,
-        side: "SELL",
-        positionSide: "SHORT",
-        type: "MARKET",
-        quantity: this.quantity,
-      }),
-    ]);
-
-    console.log("Both positions opened at market");
+    const orders = [
+      () => (
+        this.orderManager.placeOrder({
+          symbol: this.symbol,
+          side: "BUY",
+          positionSide: "LONG",
+          type: "MARKET",
+          quantity: this.quantity,
+        })
+      ),
+      () => (
+        this.orderManager.placeOrder({
+          symbol: this.symbol,
+          side: "SELL",
+          positionSide: "SHORT",
+          type: "MARKET",
+          quantity: this.quantity,
+        })
+      )
+    ];
+    await Promise.all(orders.map((x) => x()));
   }
 
   private async placeInitialOrders() {
