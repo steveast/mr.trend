@@ -11,6 +11,7 @@ interface Position {
   active: boolean;
   takeProfitTriggered: boolean;
   closed: boolean;
+  stopOrderId?: string;
 }
 
 export class GridDualStrategy {
@@ -37,7 +38,7 @@ export class GridDualStrategy {
   async start(entryPrice: number): Promise<any> {
     Object.assign(this.pos, await this.orderManager.getPosition());
 
-    if (!this.pos.long && ! this.pos.short) {
+    if (!this.pos.long && !this.pos.short) {
       await this.orderManager.cancelAll(this.symbol);
     }
 
@@ -50,7 +51,7 @@ export class GridDualStrategy {
     await this.orderManager.ensureHedgeMode();
 
     const stopDistance = entryPrice * 0.002;
-    const tpStep = stopDistance / 10; 
+    const tpStep = stopDistance / 10;
 
     this.long = {
       entry: entryPrice,
@@ -61,6 +62,7 @@ export class GridDualStrategy {
       active: true,
       takeProfitTriggered: false,
       closed: false,
+      stopOrderId: undefined,
     };
 
     this.short = {
@@ -72,6 +74,7 @@ export class GridDualStrategy {
       active: true,
       takeProfitTriggered: false,
       closed: false,
+      stopOrderId: undefined,
     };
 
     console.log("LONG", this.long);
@@ -94,26 +97,24 @@ export class GridDualStrategy {
     console.log(`Opening LONG at market (${this.quantity} BTC)`);
     console.log(`Opening SHORT at market (${this.quantity} BTC)`);
     const orders = [
-      () => (
+      () =>
         this.orderManager.placeOrder({
           symbol: this.symbol,
           side: "BUY",
           positionSide: "LONG",
           type: "MARKET",
           quantity: this.quantity,
-        })
-      ),
-      () => (
+        }),
+      () =>
         this.orderManager.placeOrder({
           symbol: this.symbol,
           side: "SELL",
           positionSide: "SHORT",
           type: "MARKET",
           quantity: this.quantity,
-        })
-      )
+        }),
     ];
-    await Promise.all(orders.map((x) => x()));
+    await Promise.all(orders.map(x => x()));
   }
 
   private async placeInitialOrders() {
@@ -123,30 +124,34 @@ export class GridDualStrategy {
     const qty = this.quantity / 10;
     const orders: (() => Promise<any>)[] = [];
 
+    // Первый стоп для LONG
     if (this.pos.long && this.pos.longAmt > 0) {
-      orders.push(() =>
-        this.orderManager.placeOrder({
+      orders.push(async () => {
+        const result = await this.orderManager.placeOrder({
           symbol: this.symbol,
           side: "SELL",
           type: "STOP_MARKET",
           quantity: this.pos.longAmt,
           positionSide: "LONG",
           stopPrice: this.long!.stop,
-        })
-      );
+        });
+        this.long!.stopOrderId = result.orderId?.toString();
+      });
     }
 
+    // Первый стоп для SHORT
     if (this.pos.short && this.pos.shortAmt < 0) {
-      orders.push(() =>
-        this.orderManager.placeOrder({
+      orders.push(async () => {
+        const result = await this.orderManager.placeOrder({
           symbol: this.symbol,
           side: "BUY",
           type: "STOP_MARKET",
           quantity: Math.abs(this.pos.shortAmt),
           positionSide: "SHORT",
           stopPrice: this.short!.stop,
-        })
-      );
+        });
+        this.short!.stopOrderId = result.orderId?.toString();
+      });
     }
 
     for (let i = 0; i < 10; i++) {
@@ -169,14 +174,14 @@ export class GridDualStrategy {
       // SHORT TP
       orders.push(() =>
         this.orderManager.placeOrder({
-          symbol: this.symbol, 
+          symbol: this.symbol,
           side: "BUY",
-          type: "LIMIT", 
+          type: "LIMIT",
           // type: i === 9 ? "TAKE_PROFIT_MARKET" : "LIMIT",
           quantity: qty,
           price: this.short!.takeProfits[i],
           //stopPrice: i === 9 ? this.short!.takeProfits[i] : undefined,
-          positionSide: "SHORT", 
+          positionSide: "SHORT",
           timeInForce: "GTC",
           //closePosition: String(i === 9) as any,
         })
@@ -188,7 +193,7 @@ export class GridDualStrategy {
   }
 
   async handleOrderFilled(order: OrderResult) {
-    console.log('ORDER FILLED', order);
+    console.log("ORDER FILLED", order);
     if (!this.long || !this.short) return;
 
     const isPos = Boolean(this.pos.long && this.pos.short);
@@ -202,7 +207,7 @@ export class GridDualStrategy {
         console.log("LONG closed by STOP");
         await this.moveOppositeToBreakeven("LONG");
       }
-      if (isShort && this.short.active) { 
+      if (isShort && this.short.active) {
         this.short.closed = true;
         this.short.active = false;
         console.log("SHORT closed by STOP");
@@ -230,34 +235,57 @@ export class GridDualStrategy {
 
   private async moveOppositeToBreakeven(closedSide: "LONG" | "SHORT") {
     const opposite = closedSide === "LONG" ? this.short : this.long;
-    console.log('moveOppositeToBreakeven');
-    if (opposite && opposite.active) {
-      await this.orderManager.placeOrder({
+    if (!opposite || !opposite.active || !opposite.stopOrderId) return;
+
+    const newStopPrice = opposite.entry;
+    console.log(`Moving ${opposite.side} stop to breakeven: ${newStopPrice}`);
+
+    try {
+      await this.orderManager.modifyOrder(opposite.stopOrderId, {
+        stopPrice: newStopPrice,
+      });
+      console.log(`${opposite.side} stop moved to breakeven via modifyOrder`);
+    } catch (error) {
+      console.warn(`Failed to modify stop for ${opposite.side}, falling back to cancel+place`);
+      // Fallback: если modify не сработал
+      await this.orderManager.cancelOrder(this.symbol, opposite.stopOrderId);
+      const result = await this.orderManager.placeOrder({
         symbol: this.symbol,
-        side: closedSide === "LONG" ? "SELL" : "BUY", 
+        side: closedSide === "LONG" ? "SELL" : "BUY",
         type: "STOP_MARKET",
         quantity: this.quantity,
-        stopPrice: opposite.entry,
-        positionSide: closedSide,
+        stopPrice: newStopPrice,
+        positionSide: opposite.positionSide,
       });
-      console.log(`${opposite.side} moved to breakeven`);
+      opposite.stopOrderId = result.orderId?.toString();
     }
   }
 
   private async moveStopToBreakeven(side: "LONG" | "SHORT") {
     const position = side === "LONG" ? this.long : this.short;
     const opposite = side === "LONG" ? this.short : this.long;
-    console.log('moveStopToBreakeven');
-    if (position && position.active && opposite) {
-      await this.orderManager.placeOrder({
+    if (!position || !position.active || !opposite || !position.stopOrderId) return;
+
+    const newStopPrice = opposite.stop; // = наш вход
+    console.log(`Moving ${side} stop to breakeven: ${newStopPrice}`);
+
+    try {
+      await this.orderManager.modifyOrder(position.stopOrderId, {
+        stopPrice: newStopPrice,
+      });
+      console.log(`${side} first TP → stop moved to breakeven via modifyOrder`);
+    } catch (error) {
+      console.warn(`Failed to modify stop for ${side}, falling back`);
+      await this.orderManager.cancelOrder(this.symbol, position.stopOrderId);
+      const result = await this.orderManager.placeOrder({
         symbol: this.symbol,
         side: side === "LONG" ? "SELL" : "BUY",
         type: "STOP_MARKET",
         quantity: this.quantity,
-        stopPrice: opposite.stop,
+        stopPrice: newStopPrice,
         positionSide: side,
       });
-      console.log(`${side} first TP → stop to breakeven`);
+      position.stopOrderId = result.orderId?.toString();
     }
   }
 
