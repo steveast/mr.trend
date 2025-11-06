@@ -188,8 +188,8 @@ export class GridDualStrategy {
   }
 
   async handleOrderFilled(order: OrderResult) {
+    console.log('ORDER FILLED', order);
     if (!this.long || !this.short) return;
-    console.log("Order filled", order);
 
     const isLong = order.side === "SELL";
     const isShort = order.side === "BUY";
@@ -201,7 +201,7 @@ export class GridDualStrategy {
         console.log("LONG closed by STOP");
         await this.moveOppositeToBreakeven("LONG");
       }
-      if (isShort && this.short.active) {
+      if (isShort && this.short.active) { 
         this.short.closed = true;
         this.short.active = false;
         console.log("SHORT closed by STOP");
@@ -209,12 +209,12 @@ export class GridDualStrategy {
       }
     }
 
-    if (order.type === "TAKE_PROFIT_MARKET") {
-      if (isLong && Number(order.price) >= this.long.takeProfits[0] && !this.long.takeProfitTriggered) {
+    if (order.type === "LIMIT") {
+      if (isLong && !this.long.takeProfitTriggered) {
         this.long.takeProfitTriggered = true;
         await this.moveStopToBreakeven("LONG");
       }
-      if (isShort && Number(order.price) <= this.short.takeProfits[0] && !this.short.takeProfitTriggered) {
+      if (isShort && !this.short.takeProfitTriggered) {
         this.short.takeProfitTriggered = true;
         await this.moveStopToBreakeven("SHORT");
       }
@@ -232,7 +232,7 @@ export class GridDualStrategy {
     if (opposite && opposite.active) {
       await this.orderManager.placeOrder({
         symbol: this.symbol,
-        side: opposite.side === "LONG" ? "SELL" : "BUY",
+        side: opposite.side === "LONG" ? "SELL" : "BUY", 
         type: "STOP_MARKET",
         quantity: this.quantity,
         stopPrice: opposite.entry,
@@ -244,6 +244,7 @@ export class GridDualStrategy {
   private async moveStopToBreakeven(side: "LONG" | "SHORT") {
     const position = side === "LONG" ? this.long : this.short;
     const opposite = side === "LONG" ? this.short : this.long;
+    console.log('moveStopToBreakeven')
     if (position && position.active && opposite) {
       await this.orderManager.placeOrder({
         symbol: this.symbol,

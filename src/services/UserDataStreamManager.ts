@@ -31,14 +31,51 @@ export class UserDataStreamManager extends EventEmitter {
       this.ws!.on("formattedMessage", (data: any) => {
         if (data.eventType === "ORDER_TRADE_UPDATE") {
           const order = data.order;
+          // console.log('ORDER ORIGINAL', order);
           if (order.executionType === "TRADE" && order.orderStatus === "FILLED") {
             this.emit("orderFilled", {
               symbol: order.symbol,
-              side: order.side,
-              type: order.type,
-              price: parseFloat(order.lastFilledPrice || order.price || "0"),
-              qty: parseFloat(order.lastFilledQuantity || order.quantity || "0"),
+              side: order.orderSide, // SELL
+              type: order.orderType, // LIMIT
+              price: parseFloat(order.lastFilledPrice || "0"),
+              qty: parseFloat(order.lastFilledQuantity || "0"),
               // ...order,
+              // {
+              //   symbol: 'BTCUSDT',
+              //   clientOrderId: 'x-15PC4ZJy8nE4D-0iptiEBvXEALHNK3',
+              //   orderSide: 'SELL',
+              //   orderType: 'LIMIT',
+              //   timeInForce: 'GTC',
+              //   originalQuantity: 0.001,
+              //   originalPrice: 103508.7,
+              //   averagePrice: 103508.7,
+              //   stopPrice: 0,
+              //   executionType: 'TRADE',
+              //   orderStatus: 'FILLED',
+              //   orderId: 8850365284,
+              //   lastFilledQuantity: 0.001,
+              //   orderFilledAccumulatedQuantity: 0.001,
+              //   lastFilledPrice: 103508.7,
+              //   commissionAmount: 0.02070174,
+              //   commissionAsset: 'USDT',
+              //   orderTradeTime: 1762435544251,
+              //   tradeId: 405072038,
+              //   bidsNotional: 0,
+              //   asksNotional: 0,
+              //   isMakerTrade: true,
+              //   isReduceOnly: true,
+              //   stopPriceWorkingType: 'CONTRACT_PRICE',
+              //   originalOrderType: 'LIMIT',
+              //   positionSide: 'LONG',
+              //   isCloseAll: false,
+              //   realisedProfit: 0.0265,
+              //   pP: false,
+              //   strategyId: 0,
+              //   ss: 0,
+              //   selfTradePrevention: 'EXPIRE_MAKER',
+              //   priceMatch: 'NONE',
+              //   goodTillDate: 0
+              // }
             });
           }
         }

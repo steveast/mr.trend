@@ -37,8 +37,6 @@ export class MrTrendBot {
 
     // Запуск WebSocket цены
     this.ws.on("price", async (priceSource: number) => {
-      console.log('priceSource', priceSource);
-      console.log(this.entryTriggered, this.cycleActive);
       const price = roundToFixed(priceSource, 2);
       if (!this.entryTriggered && !this.cycleActive) {
         this.entryTriggered = true;

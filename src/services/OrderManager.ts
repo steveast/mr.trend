@@ -44,7 +44,6 @@ export class OrderManager {
         delete fullOrderProps.price;
         delete fullOrderProps.timeInForce;
       }
-      console.log("Gonna set", fullOrderProps);
 
       const response = await this.client.submitNewOrder(fullOrderProps);
 
