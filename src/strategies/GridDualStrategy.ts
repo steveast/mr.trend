@@ -234,7 +234,7 @@ export class GridDualStrategy {
     if (opposite && opposite.active) {
       await this.orderManager.placeOrder({
         symbol: this.symbol,
-        side: opposite.side === "LONG" ? "SELL" : "BUY", 
+        side: closedSide === "LONG" ? "SELL" : "BUY", 
         type: "STOP_MARKET",
         quantity: this.quantity,
         stopPrice: opposite.entry,
