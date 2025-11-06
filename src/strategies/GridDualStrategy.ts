@@ -37,6 +37,10 @@ export class GridDualStrategy {
   async start(entryPrice: number): Promise<any> {
     Object.assign(this.pos, await this.orderManager.getPosition());
 
+    if (!this.pos.long && ! this.pos.short) {
+      await this.orderManager.cancelAll(this.symbol);
+    }
+
     if (this.pos.long || this.pos.short) {
       console.log("Позиция уже существует, ожидание 1 минута...");
       await new Promise(r => setTimeout(r, 60000));
@@ -46,7 +50,7 @@ export class GridDualStrategy {
     await this.orderManager.ensureHedgeMode();
 
     const stopDistance = entryPrice * 0.002;
-    const tpStep = stopDistance / 10;
+    const tpStep = stopDistance / 10; 
 
     this.long = {
       entry: entryPrice,
@@ -151,28 +155,30 @@ export class GridDualStrategy {
         this.orderManager.placeOrder({
           symbol: this.symbol,
           side: "SELL",
-          type: i === 9 ? "TAKE_PROFIT_MARKET" : "LIMIT",
+          type: "LIMIT",
+          // type: i === 9 ? "TAKE_PROFIT_MARKET" : "LIMIT",
           quantity: qty,
           price: this.long!.takeProfits[i],
-          stopPrice: i === 9 ? this.long!.takeProfits[i] : undefined,
+          //stopPrice: i === 9 ? this.long!.takeProfits[i] : undefined,
           positionSide: "LONG",
           timeInForce: "GTC",
-          closePosition: String(i === 9) as any,
+          //closePosition: String(i === 9) as any,
         })
       );
 
       // SHORT TP
       orders.push(() =>
         this.orderManager.placeOrder({
-          symbol: this.symbol,
+          symbol: this.symbol, 
           side: "BUY",
-          type: i === 9 ? "TAKE_PROFIT_MARKET" : "LIMIT",
+          type: "LIMIT", 
+          // type: i === 9 ? "TAKE_PROFIT_MARKET" : "LIMIT",
           quantity: qty,
           price: this.short!.takeProfits[i],
-          stopPrice: i === 9 ? this.short!.takeProfits[i] : undefined,
-          positionSide: "SHORT",
+          //stopPrice: i === 9 ? this.short!.takeProfits[i] : undefined,
+          positionSide: "SHORT", 
           timeInForce: "GTC",
-          closePosition: String(i === 9) as any,
+          //closePosition: String(i === 9) as any,
         })
       );
     }

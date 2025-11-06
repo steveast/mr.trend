@@ -56,13 +56,13 @@ export class OrderManager {
     }
   }
 
-  // async cancelAll(symbol: string) {
-  //   try {
-  //     await this.client.cancelAllOpenOrders({ symbol });
-  //   } catch (error: any) {
-  //     console.error("Cancel error:", error.body?.msg || error.message);
-  //   }
-  // }
+  async cancelAll(symbol: string) {
+    try {
+      await this.client.cancelAllOpenOrders({ symbol });
+    } catch (error: any) {
+      console.error("Cancel error:", error.body?.msg || error.message);
+    }
+  }
 
   async getPosition() {
     const positions = await this.client.getPositionsV3();
