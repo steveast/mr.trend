@@ -8,13 +8,12 @@ export class WebSocketManager extends EventEmitter {
 
   constructor(testnet: boolean = true) {
     super();
-    const wsUrl = testnet ? "wss://stream.binancefuture.com" : "wss://fstream.binance.com";
     this.wsClient = new WebsocketClient({
-      wsUrl,
+      testnet,
       beautify: testnet,
       api_key: process.env.API_KEY,
       api_secret: process.env.API_SECRET,
-      testnet,
+      wsUrl: testnet ? "wss://stream.binancefuture.com" : "wss://fstream.binance.com",
     });
 
     // Подключаемся к событиям

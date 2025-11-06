@@ -229,6 +229,7 @@ export class GridDualStrategy {
 
   private async moveOppositeToBreakeven(closedSide: "LONG" | "SHORT") {
     const opposite = closedSide === "LONG" ? this.short : this.long;
+    console.log('moveOppositeToBreakeven');
     if (opposite && opposite.active) {
       await this.orderManager.placeOrder({
         symbol: this.symbol,
@@ -236,6 +237,7 @@ export class GridDualStrategy {
         type: "STOP_MARKET",
         quantity: this.quantity,
         stopPrice: opposite.entry,
+        positionSide: closedSide,
       });
       console.log(`${opposite.side} moved to breakeven`);
     }
@@ -244,7 +246,7 @@ export class GridDualStrategy {
   private async moveStopToBreakeven(side: "LONG" | "SHORT") {
     const position = side === "LONG" ? this.long : this.short;
     const opposite = side === "LONG" ? this.short : this.long;
-    console.log('moveStopToBreakeven')
+    console.log('moveStopToBreakeven');
     if (position && position.active && opposite) {
       await this.orderManager.placeOrder({
         symbol: this.symbol,
@@ -252,6 +254,7 @@ export class GridDualStrategy {
         type: "STOP_MARKET",
         quantity: this.quantity,
         stopPrice: opposite.stop,
+        positionSide: side,
       });
       console.log(`${side} first TP → stop to breakeven`);
     }
