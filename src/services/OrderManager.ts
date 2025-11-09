@@ -130,4 +130,34 @@ export class OrderManager {
       }
     }
   }
+
+  async setLeverage(leverage: number = 20, positionSide?: "LONG" | "SHORT") {
+    try {
+      const params: any = { symbol: this.symbol, leverage };
+      if (positionSide) {
+        params.positionSide = positionSide; // Обязательно в Hedge Mode
+      }
+
+      const res = await this.client.setLeverage(params); // Правильный метод
+      console.log(`Leverage ${leverage}x set for ${this.symbol} ${positionSide || "(both)"}`);
+      return res;
+    } catch (error: any) {
+      console.error("Set leverage error:", error.body?.msg || error.message);
+      throw error;
+    }
+  }
+
+  async ensureIsolatedMargin() {
+    try {
+      await this.client.setMarginType({ symbol: this.symbol, marginType: "ISOLATED" }); // Правильно
+      console.log("Switched to ISOLATED margin");
+    } catch (error: any) {
+      if (error.body?.code === -4046) {
+        console.log("Already in ISOLATED margin");
+      } else {
+        console.error("Margin type error:", error.body?.msg || error.message);
+        throw error;
+      }
+    }
+  }
 }

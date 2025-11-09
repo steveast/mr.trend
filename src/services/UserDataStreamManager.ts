@@ -63,7 +63,7 @@ export class UserDataStreamManager extends EventEmitter {
             commissionAsset: order.commissionAsset,
             realisedProfit: order.realisedProfit,
             positionSide: order.positionSide,
-            isReduceOnly: order.isReduceOnly,
+            // isReduceOnly: order.isReduceOnly,
             isMakerTrade: order.isMakerTrade,
             orderTradeTime: order.orderTradeTime,
           });

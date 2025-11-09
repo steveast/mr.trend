@@ -22,8 +22,9 @@ export class GridDualStrategy {
   private symbol = "BTCUSDT";
 
   // === CONFIG: NOTIONAL IN USDT ===
-  private notionalPerSide = 15; // $1000 per side → $2000 total
+  private notionalPerSide = 1000; // $1000 per side → $2000 total
   private gridCount = 10;
+  private leverage = 20;
 
   private onCycleComplete?: () => void;
   private pos: IPosition = {
@@ -55,6 +56,10 @@ export class GridDualStrategy {
     }
 
     await this.orderManager.ensureHedgeMode();
+    await this.orderManager.ensureIsolatedMargin();
+
+    await this.orderManager.setLeverage(this.leverage, "LONG");
+    await this.orderManager.setLeverage(this.leverage, "SHORT");
 
     const stopDistance = entryPrice * 0.02;
     const tpStep = stopDistance / this.gridCount;
@@ -126,7 +131,11 @@ export class GridDualStrategy {
 
     const orders: (() => Promise<any>)[] = [];
 
-    // === STOP ORDERS ===
+    // УБРАЛИ УМНОЖЕНИЕ НА LEVERAGE
+    const tpQty = roundToFixed(qtyPerGrid, 6); // 0.000098 ≈ 0.0001 BTC
+    console.log(`TP grid size: ${tpQty} BTC (per grid, no leverage multiplier)`);
+
+    // === STOP ORDERS (полная позиция) ===
     if (this.pos.long && this.pos.longAmt > 0) {
       orders.push(async () => {
         const result = await this.orderManager.placeOrder({
@@ -167,7 +176,7 @@ export class GridDualStrategy {
           symbol: this.symbol,
           side: "SELL",
           type: isLast ? "TAKE_PROFIT_MARKET" : "LIMIT",
-          quantity: qtyPerGrid,
+          quantity: tpQty,
           price: isLast ? undefined : this.long!.takeProfits[i],
           stopPrice: isLast ? this.long!.takeProfits[i] : undefined,
           positionSide: "LONG",
@@ -181,7 +190,7 @@ export class GridDualStrategy {
           symbol: this.symbol,
           side: "BUY",
           type: isLast ? "TAKE_PROFIT_MARKET" : "LIMIT",
-          quantity: qtyPerGrid,
+          quantity: tpQty,
           price: isLast ? undefined : this.short!.takeProfits[i],
           stopPrice: isLast ? this.short!.takeProfits[i] : undefined,
           positionSide: "SHORT",
@@ -191,7 +200,7 @@ export class GridDualStrategy {
     }
 
     await Promise.all(orders.map(fn => fn()));
-    console.log(`✅ All ${this.gridCount * 2} TP orders + 2 stops placed!`);
+    console.log(`All ${this.gridCount * 2} TP orders + 2 stops placed`);
   }
 
   async handleOrderFilled(order: any) {
