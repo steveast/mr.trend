@@ -2,6 +2,7 @@ import { MrTrendBot } from "./bot/MrTrendBot";
 import "dotenv/config";
 
 const bot = new MrTrendBot(process.env.TESTNET === "true"); // true = Testnet
+console.log("TESTNET: ", process.env.TESTNET === "true");
 
 bot.start();
 
