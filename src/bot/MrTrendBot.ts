@@ -1,66 +1,81 @@
-// src/bot/MrTrendBot.ts
-
-import { OrderResult } from "binance";
 import { BinanceClient } from "../services/BinanceClient";
 import { OrderManager } from "../services/OrderManager";
 import { UserDataStreamManager } from "../services/UserDataStreamManager";
-import { WebSocketManager } from "../services/WebSocketManager";
 import { GridDualStrategy } from "../strategies/GridDualStrategy";
 import { roundToFixed } from "../utils/roundToFixed";
 
 export class MrTrendBot {
-  private ws: WebSocketManager;
   private userStream: UserDataStreamManager;
   private orderManager: OrderManager;
   private strategy: GridDualStrategy;
   private entryTriggered = false;
   private cycleActive = false;
+  private readonly symbol = "BTCUSDT";
 
-  constructor(testnet: boolean = true) {
+  constructor(testnet = true) {
     const binance = new BinanceClient(testnet);
     const client = binance.getClient();
+
     this.orderManager = new OrderManager(client);
     this.strategy = new GridDualStrategy(this.orderManager);
-    this.ws = new WebSocketManager(testnet);
+
+    // Передаём USDMClient и testnet
     this.userStream = new UserDataStreamManager(client, testnet);
 
-    // Перезапуск цикла
     this.strategy.setOnCycleComplete(() => {
       this.cycleActive = false;
       this.entryTriggered = false;
-      console.log("Ready for new entry...");
+      console.log("Cycle completed. Ready for new entry...");
     });
   }
 
   async start() {
     console.log("MrTrend Bot Starting...");
 
-    // Запуск WebSocket цены
-    this.ws.on("price", async (priceSource: number) => {
-      const price = roundToFixed(priceSource, 2);
-      if (!this.entryTriggered && !this.cycleActive) {
-        this.entryTriggered = true;
-        this.cycleActive = true;
-        console.log(`New cycle: Entry at ${price}`);
-        await this.strategy.start(price);
-      }
-    });
+    try {
+      // === MARK PRICE UPDATE ===
+      this.userStream.on("price", (price: number) => {
+        if (!this.entryTriggered && !this.cycleActive) {
+          const p = roundToFixed(price, 2);
+          console.log(`New cycle triggered at mark price: ${p}`);
+          this.entryTriggered = true;
+          this.cycleActive = true;
+          this.strategy.start(p).catch(err => {
+            console.error("Strategy start failed:", err);
+            this.resetEntryState();
+          });
+        }
+      });
 
-    // Запуск User Data Stream
-    this.userStream.on("orderFilled", async (order: OrderResult) => {
-      if (this.cycleActive) {
-        await this.strategy.handleOrderFilled(order);
-      }
-    });
+      // === ORDER FILLED ===
+      this.userStream.on("orderFilled", async (order: any) => {
+        if (!this.cycleActive) return;
+        try {
+          await this.strategy.handleOrderFilled(order);
+        } catch (err: any) {
+          console.error("Error handling order fill:", err.message);
+        }
+      });
 
-    this.ws.start("BTCUSDT");
-    await this.userStream.start();
+      // === Запуск стрима (включает mark price + user data) ===
+      await this.userStream.start(this.symbol);
+      console.log(`Subscribed to ${this.symbol} mark price and user data stream`);
+    } catch (error: any) {
+      console.error("Failed to start bot:", error.message);
+      throw error;
+    }
   }
 
   async stop() {
-    this.ws.stop();
+    console.log("Stopping MrTrend Bot...");
     this.userStream.stop();
     await this.strategy.reset();
+    this.resetEntryState();
     console.log("Bot stopped");
+  }
+
+  private resetEntryState() {
+    this.entryTriggered = false;
+    this.cycleActive = false;
   }
 }

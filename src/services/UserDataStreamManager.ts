@@ -1,118 +1,140 @@
 // src/services/UserDataStreamManager.ts
 
-import { WebsocketClient } from "binance";
-import { USDMClient } from "binance";
+import { USDMClient, WebsocketClient } from "binance";
 import { EventEmitter } from "events";
 
+/**
+ * Объединённый менеджер:
+ *  - Подписка на mark price (USDM, 1000ms)
+ *  - User Data Stream (listenKey, keep-alive, order updates)
+ */
 export class UserDataStreamManager extends EventEmitter {
-  private ws: WebsocketClient | null = null;
+  private ws: WebsocketClient;
+  private client: USDMClient;
   private listenKey: string | null = null;
   private keepAliveInterval: NodeJS.Timeout | null = null;
+  private testnet: boolean;
 
-  constructor(
-    private client: USDMClient,
-    testnet: boolean = true
-  ) {
+  constructor(client: USDMClient, testnet: boolean = true) {
     super();
+    this.client = client;
+    this.testnet = testnet;
+
+    // Один WebSocket клиент для всех потоков
     this.ws = new WebsocketClient({
       wsUrl: testnet ? "wss://stream.binancefuture.com" : "wss://fstream.binance.com",
       beautify: testnet,
-      api_key: process.env.API_KEY, 
+      api_key: process.env.API_KEY,
       api_secret: process.env.API_SECRET,
       testnet,
     });
+
+    this.setupEventHandlers();
   }
 
-  async start() {
-    try {
-      this.ws!.subscribeUsdFuturesUserDataStream();
+  private setupEventHandlers() {
+    // Подключение
+    this.ws.on("open", () => console.log("WebSocket connected"));
+    this.ws.on("reconnecting", () => console.log("WebSocket reconnecting"));
+    this.ws.on("reconnected", () => console.log("WebSocket reconnected"));
 
-      this.ws!.on("formattedMessage", (data: any) => {
-        if (data.eventType === "ORDER_TRADE_UPDATE") {
-          const order = data.order;
-          // console.log('ORDER ORIGINAL', order);
-          if (order.executionType === "TRADE" && order.orderStatus === "FILLED") {
-            this.emit("orderFilled", {
-              symbol: order.symbol,
-              side: order.orderSide, // SELL
-              type: order.orderType, // LIMIT
-              price: parseFloat(order.lastFilledPrice || "0"),
-              qty: parseFloat(order.lastFilledQuantity || "0"),
-              // ...order,
-              // {
-              //   symbol: 'BTCUSDT',
-              //   clientOrderId: 'x-15PC4ZJy8nE4D-0iptiEBvXEALHNK3',
-              //   orderSide: 'SELL',
-              //   orderType: 'LIMIT',
-              //   timeInForce: 'GTC',
-              //   originalQuantity: 0.001,
-              //   originalPrice: 103508.7,
-              //   averagePrice: 103508.7,
-              //   stopPrice: 0,
-              //   executionType: 'TRADE',
-              //   orderStatus: 'FILLED',
-              //   orderId: 8850365284,
-              //   lastFilledQuantity: 0.001,
-              //   orderFilledAccumulatedQuantity: 0.001,
-              //   lastFilledPrice: 103508.7,
-              //   commissionAmount: 0.02070174,
-              //   commissionAsset: 'USDT',
-              //   orderTradeTime: 1762435544251,
-              //   tradeId: 405072038,
-              //   bidsNotional: 0,
-              //   asksNotional: 0,
-              //   isMakerTrade: true,
-              //   isReduceOnly: true,
-              //   stopPriceWorkingType: 'CONTRACT_PRICE',
-              //   originalOrderType: 'LIMIT',
-              //   positionSide: 'LONG',
-              //   isCloseAll: false,
-              //   realisedProfit: 0.0265,
-              //   pP: false,
-              //   strategyId: 0,
-              //   ss: 0,
-              //   selfTradePrevention: 'EXPIRE_MAKER',
-              //   priceMatch: 'NONE',
-              //   goodTillDate: 0
-              // }
-            });
-          }
+    // Обработка всех сообщений
+    this.ws.on("formattedMessage", (data: any) => {
+      // === MARK PRICE UPDATE ===
+      if (data.eventType === "markPriceUpdate") {
+        const markPrice = parseFloat(data.markPrice);
+        this.emit("price", markPrice);
+        return;
+      }
+
+      // === ORDER TRADE UPDATE (User Data Stream) ===
+      if (data.eventType === "ORDER_TRADE_UPDATE") {
+        const order = data.order;
+        if (order.executionType === "TRADE" && order.orderStatus === "FILLED") {
+          this.emit("orderFilled", {
+            symbol: order.symbol,
+            side: order.orderSide,
+            type: order.orderType,
+            price: parseFloat(order.lastFilledPrice || "0"),
+            qty: parseFloat(order.lastFilledQuantity || "0"),
+            orderId: order.orderId,
+            tradeId: order.tradeId,
+            commissionAmount: order.commissionAmount,
+            commissionAsset: order.commissionAsset,
+            realisedProfit: order.realisedProfit,
+            positionSide: order.positionSide,
+            isReduceOnly: order.isReduceOnly,
+            isMakerTrade: order.isMakerTrade,
+            orderTradeTime: order.orderTradeTime,
+          });
         }
-      });
+        return;
+      }
 
+      // === ОШИБКИ ===
+      if (data.code && data.msg) {
+        console.error("WebSocket error:", data.msg);
+      }
+    });
+  }
+
+  /**
+   * Запуск: подписка на mark price + user data stream
+   */
+  async start(symbol: string = "BTCUSDT") {
+    try {
+      // 1. Подписка на mark price
+      this.ws.subscribeMarkPrice(symbol, "usdm", 1000);
+      console.log(`Subscribed to ${symbol}@markPrice@1000ms (USDM)`);
+
+      // 2. User Data Stream
+      this.ws.subscribeUsdFuturesUserDataStream();
+      console.log("Subscribed to User Data Stream");
+
+      // 3. Keep-alive для listenKey
       this.keepAliveInterval = setInterval(
         async () => {
           if (this.listenKey) {
             try {
               await this.client.keepAliveFuturesUserDataListenKey();
               console.log("ListenKey renewed");
-            } catch (err) {
-              console.error("Keep-alive failed:", err);
+            } catch (err: any) {
+              console.error("Keep-alive failed:", err.message);
             }
           }
         },
         25 * 60 * 1000
-      );
+      ); // каждые 25 минут
     } catch (error: any) {
-      console.error("UserDataStream start error:", error.message);
+      console.error("Start error:", error.message);
     }
   }
 
+  /**
+   * Остановка всех подписок и таймеров
+   */
   stop() {
+    // Очистка keep-alive
     if (this.keepAliveInterval) {
       clearInterval(this.keepAliveInterval);
       this.keepAliveInterval = null;
     }
+
+    // Закрытие listenKey
     if (this.listenKey) {
       try {
         this.client.closeFuturesUserDataListenKey();
-      } catch (err) {}
+        console.log("ListenKey closed");
+      } catch (err: any) {
+        console.warn("Failed to close listenKey:", err.message);
+      }
       this.listenKey = null;
     }
+
+    // Закрытие WebSocket
     if (this.ws) {
       this.ws.closeAll(true);
-      this.ws = null;
+      console.log("WebSocket closed");
     }
-    console.log("User Data Stream stopped");
   }
 }
