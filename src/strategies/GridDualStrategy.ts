@@ -299,7 +299,7 @@ export class GridDualStrategy {
   }
 
   async reset() {
-    await this.orderManager.cancelAll(this.symbol);
+    // await this.orderManager.cancelAll(this.symbol);
     this.long = null;
     this.short = null;
     Object.assign(this.pos, { long: undefined, short: undefined, longAmt: 0, shortAmt: 0 });

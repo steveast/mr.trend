@@ -1,5 +1,3 @@
-// src/services/UserDataStreamManager.ts
-
 import { USDMClient, WebsocketClient } from "binance";
 import { EventEmitter } from "events";
 
@@ -22,8 +20,8 @@ export class UserDataStreamManager extends EventEmitter {
 
     // Один WebSocket клиент для всех потоков
     this.ws = new WebsocketClient({
-      wsUrl: testnet ? "wss://stream.binancefuture.com" : "wss://fstream.binance.com",
-      beautify: testnet,
+      // wsUrl: testnet ? "wss://stream.binancefuture.com" : "wss://fstream.binance.com",
+      beautify: true,
       api_key: process.env.API_KEY,
       api_secret: process.env.API_SECRET,
       testnet,
@@ -40,6 +38,7 @@ export class UserDataStreamManager extends EventEmitter {
 
     // Обработка всех сообщений
     this.ws.on("formattedMessage", (data: any) => {
+      // console.log(data);
       // === MARK PRICE UPDATE ===
       if (data.eventType === "markPriceUpdate") {
         const markPrice = parseFloat(data.markPrice);
