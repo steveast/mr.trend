@@ -201,6 +201,41 @@ export class GridDualStrategy {
 
     await Promise.all(orders.map(fn => fn()));
     console.log(`All ${this.gridCount * 2} TP orders + 2 stops placed`);
+
+    /* setTimeout(() => {
+      this.handleOrderFilled({
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "MARKET",
+        price: 104087.8,
+        qty: 0.009,
+        orderId: 816601452642,
+        tradeId: 6853821401,
+        commissionAmount: 0.4683951,
+        commissionAsset: "USDT",
+        realisedProfit: -19.0782,
+        positionSide: "SHORT",
+        isMakerTrade: false,
+        orderTradeTime: 1762872205048,
+      });
+    }, 5000);
+    setTimeout(() => {
+      this.handleOrderFilled({
+        symbol: "BTCUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: 103864.3,
+        qty: 0.001,
+        orderId: 816601452969,
+        tradeId: 6853867458,
+        commissionAmount: 0.02077286,
+        commissionAsset: "USDT",
+        realisedProfit: 2.3443,
+        positionSide: "LONG",
+        isMakerTrade: true,
+        orderTradeTime: 1762872570045,
+      });
+    }, 10000); */
   }
 
   async handleOrderFilled(order: any) {
@@ -211,14 +246,14 @@ export class GridDualStrategy {
     const isShortFill = order.side === "BUY" && order.positionSide === "SHORT";
 
     // === STOP HIT ===
-    if (order.type === "STOP_MARKET") {
-      if (isLongFill && this.long.active) {
+    if (order.type === "MARKET") {
+      if (isLongFill && this.long.active && this.pos.long) {
         this.long.closed = true;
         this.long.active = false;
         console.log("❌ LONG stopped out");
         await this.moveOppositeToBreakeven("LONG");
       }
-      if (isShortFill && this.short.active) {
+      if (isShortFill && this.short.active && this.pos.short) {
         this.short.closed = true;
         this.short.active = false;
         console.log("❌ SHORT stopped out");
@@ -254,10 +289,6 @@ export class GridDualStrategy {
     console.log(`🔄 Moving ${opposite.side} stop to breakeven: ${newStop}`);
 
     try {
-      await this.orderManager.modifyOrder(opposite.stopOrderId, { stopPrice: newStop });
-      console.log(`✅ ${opposite.side} stop moved to BE (modify)`);
-    } catch (error) {
-      console.warn(`⚠️ Modify failed, using cancel+place for ${opposite.side}`);
       await this.orderManager.cancelOrder(this.symbol, opposite.stopOrderId!);
 
       const result = await this.orderManager.placeOrder({
@@ -269,6 +300,8 @@ export class GridDualStrategy {
         positionSide: opposite.positionSide,
       });
       opposite.stopOrderId = result.orderId?.toString();
+    } catch (error) {
+      console.warn(`⚠️ Change stop to BE failed ${opposite.side}`);
     }
   }
 
@@ -280,10 +313,6 @@ export class GridDualStrategy {
     console.log(`🔄 Moving ${side} stop to breakeven: ${newStop}`);
 
     try {
-      await this.orderManager.modifyOrder(position.stopOrderId, { stopPrice: newStop });
-      console.log(`✅ ${side} stop moved to BE (modify)`);
-    } catch (error) {
-      console.warn(`⚠️ Modify failed, using cancel+place for ${side}`);
       await this.orderManager.cancelOrder(this.symbol, position.stopOrderId!);
 
       const result = await this.orderManager.placeOrder({
@@ -295,6 +324,8 @@ export class GridDualStrategy {
         positionSide: side,
       });
       position.stopOrderId = result.orderId?.toString();
+    } catch (error) {
+      console.warn(`⚠️ Change stop to TP failed, using cancel+place for ${side}`);
     }
   }
 

@@ -55,30 +55,6 @@ export class OrderManager {
     }
   }
 
-  // Новый метод: модификация существующего ордера
-  async modifyOrder(orderId: string, params: { stopPrice?: number; quantity?: number; price?: number }) {
-    try {
-      const modifyParams: any = {
-        symbol: this.symbol,
-        orderId: Number(orderId),
-        ...Object.fromEntries(
-          Object.entries({
-            stopPrice: params.stopPrice ? roundToFixed(params.stopPrice, 1) : undefined,
-            quantity: params.quantity ? roundToFixed(params.quantity, 3) : undefined,
-            price: params.price ? roundToFixed(params.price, 1) : undefined,
-          }).filter(([_, v]) => v !== undefined)
-        ),
-      };
-
-      const response = await this.client.modifyOrder(modifyParams);
-      console.log(`Order modified: ID=${orderId}, new stopPrice=${params.stopPrice}`);
-      return response;
-    } catch (error: any) {
-      console.error("Modify order error:", error.body?.msg || error.message);
-      throw error;
-    }
-  }
-
   async cancelAll(symbol: string) {
     try {
       await this.client.cancelAllOpenOrders({ symbol });
