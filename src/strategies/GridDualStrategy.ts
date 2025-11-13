@@ -1,7 +1,6 @@
 // src/strategies/GridDualStrategy.ts
 
 import { IPosition, OrderManager } from "../services/OrderManager";
-import { OrderResult } from "binance";
 import { roundToFixed } from "../utils/roundToFixed";
 
 interface Position {
@@ -307,9 +306,10 @@ export class GridDualStrategy {
 
   private async moveStopToBreakeven(side: "LONG" | "SHORT") {
     const position = side === "LONG" ? this.long : this.short;
-    if (!position || !position.active || !position.stopOrderId) return;
+    const opposite = side === "LONG" ? this.short : this.long;
+    if (!position || !position.active || !position.stopOrderId || !opposite) return;
 
-    const newStop = position.entry;
+    const newStop = opposite.stop;
     console.log(`🔄 Moving ${side} stop to breakeven: ${newStop}`);
 
     try {
