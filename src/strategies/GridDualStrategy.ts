@@ -21,7 +21,7 @@ export class GridDualStrategy {
   private symbol = "BTCUSDT";
 
   // === CONFIG: NOTIONAL IN USDT ===
-  private notionalPerSide = 1000; // $1000 per side → $2000 total
+  private notionalPerSide = 20 * 50; // 20 usd per position
   private gridCount = 10;
   private leverage = 20;
 
