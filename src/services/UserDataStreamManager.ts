@@ -21,7 +21,7 @@ export class UserDataStreamManager extends EventEmitter {
     // Один WebSocket клиент для всех потоков
     this.ws = new WebsocketClient({
       // wsUrl: testnet ? "wss://stream.binancefuture.com" : "wss://fstream.binance.com",
-      beautify: true,
+      beautify: testnet,
       api_key: process.env.API_KEY,
       api_secret: process.env.API_SECRET,
       testnet,
