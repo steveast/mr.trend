@@ -78,14 +78,22 @@ export class OrderManager {
 
     const long = symbolPositions.find(p => p.positionSide === "LONG");
     const short = symbolPositions.find(p => p.positionSide === "SHORT");
-    const longAmt = parseFloat((long?.positionAmt as any) || "0");
-    const shortAmt = parseFloat((short?.positionAmt as any) || "0");
+
+    if (long) {
+      long.entryPrice = roundToFixed(long.entryPrice, 2);
+      long.positionAmt = roundToFixed(long.positionAmt, 2);
+    }
+    if (short) {
+      short.entryPrice = roundToFixed(short.entryPrice, 2);
+      short.positionAmt = roundToFixed(short.positionAmt, 2);
+    }
 
     return {
       long,
       short,
-      longAmt,
-      shortAmt,
+    } as {
+      long: FuturesPositionV3 & { entryPrice: number; positionAmt: number };
+      short: FuturesPositionV3 & { entryPrice: number; positionAmt: number };
     };
   }
 
