@@ -36,12 +36,14 @@ export class MrTrendBot {
   }
 
   async start() {
+    console.log('start')
     this.notifier.botStarted(this.testnet);
 
     try {
       // === MARK PRICE UPDATE ===
       this.userStream.on("price", (price: number) => {
         if ((!this.entryTriggered && !this.cycleActive) || this.needRestart) {
+          console.log(price);
           const p = roundToFixed(price, 2);
           this.entryTriggered = true;
           this.cycleActive = true;
