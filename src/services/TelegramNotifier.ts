@@ -1,5 +1,5 @@
 // src/services/TelegramNotifier.ts
-import fetch from "cross-fetch";
+import fetch from 'cross-fetch';
 
 export class TelegramNotifier {
   private readonly token: string;
@@ -7,37 +7,37 @@ export class TelegramNotifier {
   private readonly enabled: boolean;
 
   constructor() {
-    this.token = process.env.TELEGRAM_BOT_TOKEN || "";
-    this.chatId = process.env.TELEGRAM_CHAT_ID || "";
+    this.token = process.env.TELEGRAM_BOT_TOKEN || '';
+    this.chatId = process.env.TELEGRAM_CHAT_ID || '';
     this.enabled = !!this.token && !!this.chatId;
   }
 
   private async send(text: string): Promise<void> {
     // === ВЫВОД В КОНСОЛЬ ===
-    console.log(`\x1b[36m[Telegram]\x1b[0m ${text.replace(/<[^>]*>/g, "").trim()}`);
+    console.log(`\x1b[36m[Telegram]\x1b[0m ${text.replace(/<[^>]*>/g, '').trim()}`);
     if (!this.enabled) return;
 
     const url = `https://api.telegram.org/bot${this.token}/sendMessage`;
     const payload = {
       chat_id: this.chatId,
       text,
-      parse_mode: "HTML" as const,
+      parse_mode: 'HTML' as const,
       disable_web_page_preview: true,
     };
 
     try {
       const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const err = await res.text();
-        console.warn("Telegram API error:", err);
+        console.warn('Telegram API error:', err);
       }
     } catch (err: any) {
-      console.warn("Telegram send failed:", err.message);
+      console.warn('Telegram send failed:', err.message);
     }
   }
 
@@ -46,16 +46,16 @@ export class TelegramNotifier {
   botStarted(testnet: boolean) {
     const msg = `
 <b>Mr. Trend Bot Запущен</b>
-<b>Сеть:</b> ${testnet ? "TESTNET" : "MAINNET"}
+<b>Сеть:</b> ${testnet ? 'TESTNET' : 'MAINNET'}
 <b>Символ:</b> BTCUSDT
-<b>Время:</b> ${new Date().toLocaleString("ru")}
+<b>Время:</b> ${new Date().toLocaleString('ru')}
     `.trim();
 
     this.send(msg);
   }
 
   orderFilled(order: any) {
-    const profit = order.realisedProfit >= 0 ? "" : "";
+    const profit = order.realisedProfit >= 0 ? '' : '';
     const msg = `
 <b>Ордер исполнен</b>
 <b>Сторона:</b> ${order.side}

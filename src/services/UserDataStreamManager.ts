@@ -1,5 +1,5 @@
-import { USDMClient, WebsocketClient } from "binance";
-import { EventEmitter } from "events";
+import { USDMClient, WebsocketClient } from 'binance';
+import { EventEmitter } from 'events';
 
 /**
  * Объединённый менеджер:
@@ -32,29 +32,29 @@ export class UserDataStreamManager extends EventEmitter {
 
   private setupEventHandlers() {
     // Подключение
-    this.ws.on("open", () => console.log("WebSocket connected"));
-    this.ws.on("reconnecting", () => console.log("WebSocket reconnecting"));
-    this.ws.on("reconnected", () => console.log("WebSocket reconnected"));
+    this.ws.on('open', () => console.log('WebSocket connected'));
+    this.ws.on('reconnecting', () => console.log('WebSocket reconnecting'));
+    this.ws.on('reconnected', () => console.log('WebSocket reconnected'));
 
     // Обработка всех сообщений
-    this.ws.on("formattedMessage", (data: any) => {
+    this.ws.on('formattedMessage', (data: any) => {
       // === MARK PRICE UPDATE ===
-      if (data.eventType === "markPriceUpdate") {
+      if (data.eventType === 'markPriceUpdate') {
         const markPrice = parseFloat(data.markPrice);
-        this.emit("price", markPrice);
+        this.emit('price', markPrice);
         return;
       }
 
       // === ORDER TRADE UPDATE (User Data Stream) ===
-      if (data.eventType === "ORDER_TRADE_UPDATE") {
+      if (data.eventType === 'ORDER_TRADE_UPDATE') {
         const order = data.order;
-        if (order.executionType === "TRADE" && order.orderStatus === "FILLED") {
-          this.emit("orderFilled", {
+        if (order.executionType === 'TRADE' && order.orderStatus === 'FILLED') {
+          this.emit('orderFilled', {
             symbol: order.symbol,
             side: order.orderSide,
             type: order.orderType,
-            price: parseFloat(order.lastFilledPrice || "0"),
-            qty: parseFloat(order.lastFilledQuantity || "0"),
+            price: parseFloat(order.lastFilledPrice || '0'),
+            qty: parseFloat(order.lastFilledQuantity || '0'),
             orderId: order.orderId,
             tradeId: order.tradeId,
             commissionAmount: order.commissionAmount,
@@ -71,7 +71,7 @@ export class UserDataStreamManager extends EventEmitter {
 
       // === ОШИБКИ ===
       if (data.code && data.msg) {
-        console.error("WebSocket error:", data.msg);
+        console.error('WebSocket error:', data.msg);
       }
     });
   }
@@ -79,15 +79,15 @@ export class UserDataStreamManager extends EventEmitter {
   /**
    * Запуск: подписка на mark price + user data stream
    */
-  async start(symbol: string = "BTCUSDT") {
+  async start(symbol: string = 'BTCUSDT') {
     try {
       // 1. Подписка на mark price
-      this.ws.subscribeMarkPrice(symbol, "usdm", 1000);
+      this.ws.subscribeMarkPrice(symbol, 'usdm', 1000);
       console.log(`Subscribed to ${symbol}@markPrice@1000ms (USDM)`);
 
       // 2. User Data Stream
       this.ws.subscribeUsdFuturesUserDataStream();
-      console.log("Subscribed to User Data Stream");
+      console.log('Subscribed to User Data Stream');
 
       // 3. Keep-alive для listenKey
       this.keepAliveInterval = setInterval(
@@ -95,16 +95,16 @@ export class UserDataStreamManager extends EventEmitter {
           if (this.listenKey) {
             try {
               await this.client.keepAliveFuturesUserDataListenKey();
-              console.log("ListenKey renewed");
+              console.log('ListenKey renewed');
             } catch (err: any) {
-              console.error("Keep-alive failed:", err.message);
+              console.error('Keep-alive failed:', err.message);
             }
           }
         },
         25 * 60 * 1000
       ); // каждые 25 минут
     } catch (error: any) {
-      console.error("Start error:", error.message);
+      console.error('Start error:', error.message);
     }
   }
 
@@ -122,9 +122,9 @@ export class UserDataStreamManager extends EventEmitter {
     if (this.listenKey) {
       try {
         this.client.closeFuturesUserDataListenKey();
-        console.log("ListenKey closed");
+        console.log('ListenKey closed');
       } catch (err: any) {
-        console.warn("Failed to close listenKey:", err.message);
+        console.warn('Failed to close listenKey:', err.message);
       }
       this.listenKey = null;
     }
@@ -132,7 +132,7 @@ export class UserDataStreamManager extends EventEmitter {
     // Закрытие WebSocket
     if (this.ws) {
       this.ws.closeAll(true);
-      console.log("WebSocket closed");
+      console.log('WebSocket closed');
     }
   }
 }

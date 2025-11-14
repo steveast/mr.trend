@@ -1,15 +1,15 @@
 // src/strategies/GridDualStrategy.ts
 
-import { IPosition, OrderManager } from "../services/OrderManager";
-import { roundToFixed } from "../utils/roundToFixed";
+import { IPosition, OrderManager } from '../services/OrderManager';
+import { roundToFixed } from '../utils/roundToFixed';
 
 interface Position {
   entry: number;
   stop: number;
   stopOpposite: number;
   takeProfits: number[];
-  side: "LONG" | "SHORT";
-  positionSide: "LONG" | "SHORT";
+  side: 'LONG' | 'SHORT';
+  positionSide: 'LONG' | 'SHORT';
   positionAmt: number;
   active: boolean;
   takeProfitTriggered: number;
@@ -20,7 +20,7 @@ interface Position {
 export class GridDualStrategy {
   private long: Position | null = null;
   private short: Position | null = null;
-  private symbol = "BTCUSDT";
+  private symbol = 'BTCUSDT';
 
   // === CONFIG: NOTIONAL IN USDT ===
   private notionalPerSide = 20 * 50; // 20 usd per position
@@ -51,8 +51,8 @@ export class GridDualStrategy {
         stop: stopLong,
         stopOpposite: stopShort,
         takeProfits: Array.from({ length: this.gridCount }, (_, i) => roundToFixed(entry + stopDistance + tpStep * (i + 1), 2)),
-        side: "LONG",
-        positionSide: "LONG",
+        side: 'LONG',
+        positionSide: 'LONG',
         positionAmt: long.positionAmt || 0,
         active: this.long?.active ?? true,
         takeProfitTriggered: this.long?.takeProfitTriggered ?? 0,
@@ -73,8 +73,8 @@ export class GridDualStrategy {
         stop: stopShort,
         stopOpposite: stopLong,
         takeProfits: Array.from({ length: this.gridCount }, (_, i) => roundToFixed(entry - stopDistance - tpStep * (i + 1), 2)),
-        side: "SHORT",
-        positionSide: "SHORT",
+        side: 'SHORT',
+        positionSide: 'SHORT',
         positionAmt: short.positionAmt || 0,
         active: this.short?.active ?? true,
         takeProfitTriggered: this.short?.takeProfitTriggered ?? 0,
@@ -96,7 +96,7 @@ export class GridDualStrategy {
     if (this.long || this.short) {
       await new Promise(r => setTimeout(r, 60000));
       restart();
-      return "Waiting for the end of the cycle!";
+      return 'Waiting for the end of the cycle!';
     }
 
     const qtyPerGrid = roundToFixed(this.notionalPerSide / this.gridCount / entryPrice, 6);
@@ -104,14 +104,14 @@ export class GridDualStrategy {
     await this.orderManager.ensureHedgeMode();
     await this.orderManager.ensureIsolatedMargin();
 
-    await this.orderManager.setLeverage(this.leverage, "LONG");
-    await this.orderManager.setLeverage(this.leverage, "SHORT");
+    await this.orderManager.setLeverage(this.leverage, 'LONG');
+    await this.orderManager.setLeverage(this.leverage, 'SHORT');
 
     await this.openPositions(entryPrice);
     await new Promise(res => setTimeout(res, 300));
     await this.placeInitialOrders(qtyPerGrid);
 
-    return "New cycle started!";
+    return 'New cycle started!';
   }
 
   private async openPositions(entryPrice: number) {
@@ -123,16 +123,16 @@ export class GridDualStrategy {
     await Promise.all([
       this.orderManager.placeOrder({
         symbol: this.symbol,
-        side: "BUY",
-        positionSide: "LONG",
-        type: "MARKET",
+        side: 'BUY',
+        positionSide: 'LONG',
+        type: 'MARKET',
         quantity: qty,
       }),
       this.orderManager.placeOrder({
         symbol: this.symbol,
-        side: "SELL",
-        positionSide: "SHORT",
-        type: "MARKET",
+        side: 'SELL',
+        positionSide: 'SHORT',
+        type: 'MARKET',
         quantity: qty,
       }),
     ]);
@@ -153,10 +153,10 @@ export class GridDualStrategy {
       orders.push(async () => {
         const result = await this.orderManager.placeOrder({
           symbol: this.symbol,
-          side: "SELL",
-          type: "STOP_MARKET",
+          side: 'SELL',
+          type: 'STOP_MARKET',
           quantity: this.long!.positionAmt,
-          positionSide: "LONG",
+          positionSide: 'LONG',
           stopPrice: this.long!.stop,
         });
         this.long!.stopOrderId = result.orderId?.toString();
@@ -168,10 +168,10 @@ export class GridDualStrategy {
       orders.push(async () => {
         const result = await this.orderManager.placeOrder({
           symbol: this.symbol,
-          side: "BUY",
-          type: "STOP_MARKET",
+          side: 'BUY',
+          type: 'STOP_MARKET',
           quantity: Math.abs(this.short!.positionAmt),
-          positionSide: "SHORT",
+          positionSide: 'SHORT',
           stopPrice: this.short!.stop,
         });
         this.short!.stopOrderId = result.orderId?.toString();
@@ -187,13 +187,13 @@ export class GridDualStrategy {
       orders.push(() =>
         this.orderManager.placeOrder({
           symbol: this.symbol,
-          side: "SELL",
-          type: isLast ? "TAKE_PROFIT_MARKET" : "LIMIT",
+          side: 'SELL',
+          type: isLast ? 'TAKE_PROFIT_MARKET' : 'LIMIT',
           quantity: tpQty,
           price: isLast ? undefined : this.long!.takeProfits[i],
           stopPrice: isLast ? this.long!.takeProfits[i] : undefined,
-          positionSide: "LONG",
-          timeInForce: isLast ? undefined : "GTC",
+          positionSide: 'LONG',
+          timeInForce: isLast ? undefined : 'GTC',
         })
       );
 
@@ -201,13 +201,13 @@ export class GridDualStrategy {
       orders.push(() =>
         this.orderManager.placeOrder({
           symbol: this.symbol,
-          side: "BUY",
-          type: isLast ? "TAKE_PROFIT_MARKET" : "LIMIT",
+          side: 'BUY',
+          type: isLast ? 'TAKE_PROFIT_MARKET' : 'LIMIT',
           quantity: tpQty,
           price: isLast ? undefined : this.short!.takeProfits[i],
           stopPrice: isLast ? this.short!.takeProfits[i] : undefined,
-          positionSide: "SHORT",
-          timeInForce: isLast ? undefined : "GTC",
+          positionSide: 'SHORT',
+          timeInForce: isLast ? undefined : 'GTC',
         })
       );
     }
@@ -252,52 +252,54 @@ export class GridDualStrategy {
   }
 
   async handleOrderFilled(order: any) {
-    console.log("ORDER FILLED:", order);
-    const isLongFill = order.side === "SELL" && order.positionSide === "LONG";
-    const isShortFill = order.side === "BUY" && order.positionSide === "SHORT";
+    console.log('ORDER FILLED:', order);
+    const isLongFill = order.side === 'SELL' && order.positionSide === 'LONG';
+    const isShortFill = order.side === 'BUY' && order.positionSide === 'SHORT';
 
     // === STOP HIT ===
-    if (order.type === "MARKET") {
+    if (order.type === 'MARKET') {
       if (isLongFill && this.long?.active) {
         this.long.closed = true;
         this.long.active = false;
-        console.log("❌ LONG stopped out");
-        await this.moveOppositeToBreakeven("LONG");
+        console.log('❌ LONG stopped out');
+        await this.moveOppositeToBreakeven('LONG');
       }
       if (isShortFill && this.short?.active) {
         this.short.closed = true;
         this.short.active = false;
-        console.log("❌ SHORT stopped out");
-        await this.moveOppositeToBreakeven("SHORT");
+        console.log('❌ SHORT stopped out');
+        await this.moveOppositeToBreakeven('SHORT');
       }
     }
 
     // === FIRST TP HIT → MOVE STOP TO BREAKEVEN ===
-    if (order.type === "LIMIT" && isLongFill) {
+    if (order.type === 'LIMIT' && isLongFill) {
       this.long!.takeProfitTriggered += 1;
+      console.log('Собранно тейков: ' + this.long!.takeProfitTriggered);
       if (this.long!.takeProfitTriggered === 1) {
-        console.log("✅ LONG first TP hit → moving stop to BE");
-        await this.moveStopToBreakeven("LONG");
+        console.log('✅ LONG first TP hit → moving stop to BE');
+        await this.moveStopToBreakeven('LONG');
       }
     }
-    if (order.type === "LIMIT" && isShortFill) {
+    if (order.type === 'LIMIT' && isShortFill) {
       this.short!.takeProfitTriggered += 1;
+      console.log('Собранно тейков: ' + this.short!.takeProfitTriggered);
       if (this.short!.takeProfitTriggered === 1) {
-        console.log("✅ SHORT first TP hit → moving stop to BE");
-        await this.moveStopToBreakeven("SHORT");
+        console.log('✅ SHORT first TP hit → moving stop to BE');
+        await this.moveStopToBreakeven('SHORT');
       }
     }
 
     // === CYCLE COMPLETE ===
     if (this.long?.closed && this.short?.closed) {
-      console.log("🎉 Both sides closed. Cycle complete.");
+      console.log('🎉 Both sides closed. Cycle complete.');
       await this.reset();
       this.onCycleComplete?.();
     }
   }
 
-  private async moveOppositeToBreakeven(closedSide: "LONG" | "SHORT") {
-    const opposite = closedSide === "LONG" ? this.short : this.long;
+  private async moveOppositeToBreakeven(closedSide: 'LONG' | 'SHORT') {
+    const opposite = closedSide === 'LONG' ? this.short : this.long;
     if (!opposite || !opposite.active || !opposite.stopOrderId) return;
 
     const newStop = opposite.entry;
@@ -308,8 +310,8 @@ export class GridDualStrategy {
 
       const result = await this.orderManager.placeOrder({
         symbol: this.symbol,
-        side: closedSide === "LONG" ? "BUY" : "SELL",
-        type: "STOP_MARKET",
+        side: closedSide === 'LONG' ? 'BUY' : 'SELL',
+        type: 'STOP_MARKET',
         quantity: Math.abs(opposite.positionAmt),
         stopPrice: newStop,
         positionSide: opposite.positionSide,
@@ -320,8 +322,9 @@ export class GridDualStrategy {
     }
   }
 
-  private async moveStopToBreakeven(side: "LONG" | "SHORT") {
-    const position = side === "LONG" ? this.long : this.short;
+  private async moveStopToBreakeven(side: 'LONG' | 'SHORT') {
+    const position = side === 'LONG' ? this.long : this.short;
+    console.log('The postion', position);
     if (!position || !position.active || !position.stopOrderId) return;
 
     const newStop = position.stopOpposite;
@@ -332,8 +335,8 @@ export class GridDualStrategy {
 
       const result = await this.orderManager.placeOrder({
         symbol: this.symbol,
-        side: side === "LONG" ? "SELL" : "BUY",
-        type: "STOP_MARKET",
+        side: side === 'LONG' ? 'SELL' : 'BUY',
+        type: 'STOP_MARKET',
         quantity: Math.abs(position.positionAmt),
         stopPrice: newStop,
         positionSide: side,
@@ -348,6 +351,6 @@ export class GridDualStrategy {
     // await this.orderManager.cancelAll(this.symbol);
     this.long = null;
     this.short = null;
-    console.log("🔄 Strategy reset");
+    console.log('🔄 Strategy reset');
   }
 }

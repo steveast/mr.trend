@@ -1,9 +1,9 @@
-import { BinanceClient } from "../services/BinanceClient";
-import { OrderManager } from "../services/OrderManager";
-import { TelegramNotifier } from "../services/TelegramNotifier";
-import { UserDataStreamManager } from "../services/UserDataStreamManager";
-import { GridDualStrategy } from "../strategies/GridDualStrategy";
-import { roundToFixed } from "../utils/roundToFixed";
+import { BinanceClient } from '../services/BinanceClient';
+import { OrderManager } from '../services/OrderManager';
+import { TelegramNotifier } from '../services/TelegramNotifier';
+import { UserDataStreamManager } from '../services/UserDataStreamManager';
+import { GridDualStrategy } from '../strategies/GridDualStrategy';
+import { roundToFixed } from '../utils/roundToFixed';
 
 export class MrTrendBot {
   private userStream: UserDataStreamManager;
@@ -14,7 +14,7 @@ export class MrTrendBot {
   private cycleActive = false;
   private needRestart = false;
   private testnet = false;
-  private readonly symbol = "BTCUSDT";
+  private readonly symbol = 'BTCUSDT';
 
   constructor(testnet = true) {
     const binance = new BinanceClient(testnet);
@@ -40,7 +40,7 @@ export class MrTrendBot {
 
     try {
       // === MARK PRICE UPDATE ===
-      this.userStream.on("price", (price: number) => {
+      this.userStream.on('price', (price: number) => {
         if ((!this.entryTriggered && !this.cycleActive) || this.needRestart) {
           const p = roundToFixed(price, 2);
           this.entryTriggered = true;
@@ -54,7 +54,7 @@ export class MrTrendBot {
               console.log(status);
             })
             .catch(err => {
-              console.error("Strategy start failed:", err);
+              console.error('Strategy start failed:', err);
               this.notifier.error(`Strategy start failed: ${err.message}`);
               this.resetEntryState();
             });
@@ -62,13 +62,13 @@ export class MrTrendBot {
       });
 
       // === ORDER FILLED ===
-      this.userStream.on("orderFilled", async (order: any) => {
+      this.userStream.on('orderFilled', async (order: any) => {
         if (!this.cycleActive) return;
         try {
           await this.strategy.handleOrderFilled(order);
           this.notifier.orderFilled(order);
         } catch (err: any) {
-          console.error("Error handling order fill:", err.message);
+          console.error('Error handling order fill:', err.message);
           this.notifier.error(`Order fill error: ${err.message}`);
         }
       });
@@ -77,18 +77,18 @@ export class MrTrendBot {
       await this.userStream.start(this.symbol);
       console.log(`Subscribed to ${this.symbol} mark price and user data stream`);
     } catch (error: any) {
-      console.error("Failed to start bot:", error.message);
+      console.error('Failed to start bot:', error.message);
       this.notifier.error(`Bot start failed: ${error.message}`);
       throw error;
     }
   }
 
   async stop() {
-    console.log("Stopping MrTrend Bot...");
+    console.log('Stopping MrTrend Bot...');
     this.userStream.stop();
     await this.strategy.reset();
     this.resetEntryState();
-    console.log("Bot stopped");
+    console.log('Bot stopped');
   }
 
   private resetEntryState() {

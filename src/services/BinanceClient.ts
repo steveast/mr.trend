@@ -1,5 +1,5 @@
-import { USDMClient } from "binance";
-import "dotenv/config";
+import { USDMClient } from 'binance';
+import 'dotenv/config';
 
 export class BinanceClient {
   private client: USDMClient;

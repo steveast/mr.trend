@@ -1,15 +1,15 @@
-import { FuturesPositionV3, NewFuturesOrderParams, USDMClient } from "binance";
-import { roundToFixed } from "../utils/roundToFixed";
+import { FuturesPositionV3, NewFuturesOrderParams, USDMClient } from 'binance';
+import { roundToFixed } from '../utils/roundToFixed';
 
 export interface OrderParams {
   symbol: string;
-  side: "BUY" | "SELL";
-  type: "MARKET" | "LIMIT" | "STOP_MARKET" | "TAKE_PROFIT_MARKET" | "TAKE_PROFIT";
+  side: 'BUY' | 'SELL';
+  type: 'MARKET' | 'LIMIT' | 'STOP_MARKET' | 'TAKE_PROFIT_MARKET' | 'TAKE_PROFIT';
   quantity: number;
   price?: number;
-  positionSide?: "SHORT" | "LONG";
+  positionSide?: 'SHORT' | 'LONG';
   stopPrice?: number;
-  timeInForce?: "GTC" | "IOC" | "FOK";
+  timeInForce?: 'GTC' | 'IOC' | 'FOK';
 }
 
 export interface IPosition {
@@ -20,7 +20,7 @@ export interface IPosition {
 }
 
 export class OrderManager {
-  private symbol = "BTCUSDT";
+  private symbol = 'BTCUSDT';
 
   constructor(public client: USDMClient) {}
 
@@ -40,7 +40,7 @@ export class OrderManager {
         } as any).filter(([_, v]) => v !== undefined)
       );
 
-      if (params.type === "STOP_MARKET" || params.type === "TAKE_PROFIT_MARKET") {
+      if (params.type === 'STOP_MARKET' || params.type === 'TAKE_PROFIT_MARKET') {
         delete fullOrderProps.price;
         delete fullOrderProps.timeInForce;
       }
@@ -50,7 +50,7 @@ export class OrderManager {
       console.log(`Order placed: ${params.side} ${params.type} @ ${params.price || params.stopPrice || params.quantity}`);
       return response;
     } catch (error: any) {
-      console.error("Order error:", error.body?.msg || error.message);
+      console.error('Order error:', error.body?.msg || error.message);
       throw error;
     }
   }
@@ -59,7 +59,7 @@ export class OrderManager {
     try {
       await this.client.cancelAllOpenOrders({ symbol });
     } catch (error: any) {
-      console.error("Cancel error:", error.body?.msg || error.message);
+      console.error('Cancel error:', error.body?.msg || error.message);
     }
   }
 
@@ -68,7 +68,7 @@ export class OrderManager {
       await this.client.cancelOrder({ symbol, orderId: Number(orderId) });
       console.log(`Order cancelled: ID=${orderId}`);
     } catch (error: any) {
-      console.error("Cancel single order error:", error.body?.msg || error.message);
+      console.error('Cancel single order error:', error.body?.msg || error.message);
     }
   }
 
@@ -76,8 +76,8 @@ export class OrderManager {
     const positions = await this.client.getPositionsV3();
     const symbolPositions = positions.filter(p => p.symbol === this.symbol);
 
-    const long = symbolPositions.find(p => p.positionSide === "LONG");
-    const short = symbolPositions.find(p => p.positionSide === "SHORT");
+    const long = symbolPositions.find(p => p.positionSide === 'LONG');
+    const short = symbolPositions.find(p => p.positionSide === 'SHORT');
 
     if (long) {
       long.entryPrice = roundToFixed(long.entryPrice, 2);
@@ -99,23 +99,23 @@ export class OrderManager {
 
   async ensureHedgeMode() {
     try {
-      const res = await this.client.setPositionMode({ dualSidePosition: "true" }); // boolean, а не "true"
+      const res = await this.client.setPositionMode({ dualSidePosition: 'true' }); // boolean, а не "true"
 
-      if (res && res.msg === "success") {
-        console.log("✅ Hedge mode включён");
+      if (res && res.msg === 'success') {
+        console.log('✅ Hedge mode включён');
       } else {
-        console.log("❌ Не удалось включить Hedge mode:", res);
+        console.log('❌ Не удалось включить Hedge mode:', res);
       }
     } catch ({ code, message }: any) {
       if (code === -4059) {
-        console.log("Hedge mode уже активен");
+        console.log('Hedge mode уже активен');
       } else {
-        console.error("Ошибка hedge mode:", message);
+        console.error('Ошибка hedge mode:', message);
       }
     }
   }
 
-  async setLeverage(leverage: number = 20, positionSide?: "LONG" | "SHORT") {
+  async setLeverage(leverage: number = 20, positionSide?: 'LONG' | 'SHORT') {
     try {
       const params: any = { symbol: this.symbol, leverage };
       if (positionSide) {
@@ -123,23 +123,23 @@ export class OrderManager {
       }
 
       const res = await this.client.setLeverage(params); // Правильный метод
-      console.log(`Leverage ${leverage}x set for ${this.symbol} ${positionSide || "(both)"}`);
+      console.log(`Leverage ${leverage}x set for ${this.symbol} ${positionSide || '(both)'}`);
       return res;
     } catch (error: any) {
-      console.error("Set leverage error:", error.body?.msg || error.message);
+      console.error('Set leverage error:', error.body?.msg || error.message);
       throw error;
     }
   }
 
   async ensureIsolatedMargin() {
     try {
-      await this.client.setMarginType({ symbol: this.symbol, marginType: "ISOLATED" }); // Правильно
-      console.log("Switched to ISOLATED margin");
+      await this.client.setMarginType({ symbol: this.symbol, marginType: 'ISOLATED' }); // Правильно
+      console.log('Switched to ISOLATED margin');
     } catch (error: any) {
       if (error.body?.code === -4046) {
-        console.log("Already in ISOLATED margin");
+        console.log('Already in ISOLATED margin');
       } else {
-        console.error("Margin type error:", error.body?.msg || error.message);
+        console.error('Margin type error:', error.body?.msg || error.message);
         throw error;
       }
     }
