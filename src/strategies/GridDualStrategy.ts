@@ -39,6 +39,40 @@ export class GridDualStrategy {
     this.onCycleComplete = callback;
   }
 
+  fillPosition(entryPrice: number) {
+    const stopDistance = entryPrice * 0.02;
+    const tpStep = stopDistance / this.gridCount;
+
+    return {
+      long: () => {
+        this.long = {
+          entry: entryPrice,
+          stop: roundToFixed(entryPrice - stopDistance, 2),
+          takeProfits: Array.from({ length: this.gridCount }, (_, i) => roundToFixed(entryPrice + stopDistance + tpStep * (i + 1), 2)),
+          side: "LONG",
+          positionSide: "LONG",
+          active: true,
+          takeProfitTriggered: false,
+          closed: false,
+          stopOrderId: undefined,
+        };
+      },
+      short: () => {
+        this.short = {
+          entry: entryPrice,
+          stop: roundToFixed(entryPrice + stopDistance, 2),
+          takeProfits: Array.from({ length: this.gridCount }, (_, i) => roundToFixed(entryPrice - stopDistance - tpStep * (i + 1), 2)),
+          side: "SHORT",
+          positionSide: "SHORT",
+          active: true,
+          takeProfitTriggered: false,
+          closed: false,
+          stopOrderId: undefined,
+        };
+      },
+    };
+  }
+
   async start(entryPrice: number, restart: VoidFunction): Promise<any> {
     Object.assign(this.pos, await this.orderManager.getPosition());
 
@@ -50,44 +84,29 @@ export class GridDualStrategy {
     // Wait if position exists
     if (this.pos.long || this.pos.short) {
       console.log("Position exists, waiting 1 minute...");
+      if (this.pos.long) {
+        const p = roundToFixed(this.pos.long.entryPrice, 2);
+        this.fillPosition(p).long();
+      }
+      if (this.pos.short) {
+        const p = roundToFixed(this.pos.short.entryPrice, 2);
+        this.fillPosition(p).short();
+      }
       await new Promise(r => setTimeout(r, 60000));
       restart();
-      return "Restart cycle!";
+      return "Waiting for the end of the cycle!";
     }
+
+    const qtyPerGrid = roundToFixed(this.notionalPerSide / this.gridCount / entryPrice, 6);
+
+    this.fillPosition(entryPrice).long();
+    this.fillPosition(entryPrice).short();
 
     await this.orderManager.ensureHedgeMode();
     await this.orderManager.ensureIsolatedMargin();
 
     await this.orderManager.setLeverage(this.leverage, "LONG");
     await this.orderManager.setLeverage(this.leverage, "SHORT");
-
-    const stopDistance = entryPrice * 0.02;
-    const tpStep = stopDistance / this.gridCount;
-    const qtyPerGrid = roundToFixed(this.notionalPerSide / this.gridCount / entryPrice, 6);
-
-    this.long = {
-      entry: entryPrice,
-      stop: roundToFixed(entryPrice - stopDistance, 2),
-      takeProfits: Array.from({ length: this.gridCount }, (_, i) => roundToFixed(entryPrice + stopDistance + tpStep * (i + 1), 2)),
-      side: "LONG",
-      positionSide: "LONG",
-      active: true,
-      takeProfitTriggered: false,
-      closed: false,
-      stopOrderId: undefined,
-    };
-
-    this.short = {
-      entry: entryPrice,
-      stop: roundToFixed(entryPrice + stopDistance, 2),
-      takeProfits: Array.from({ length: this.gridCount }, (_, i) => roundToFixed(entryPrice - stopDistance - tpStep * (i + 1), 2)),
-      side: "SHORT",
-      positionSide: "SHORT",
-      active: true,
-      takeProfitTriggered: false,
-      closed: false,
-      stopOrderId: undefined,
-    };
 
     console.log("LONG Config:", this.long);
     console.log("SHORT Config:", this.short);
@@ -247,13 +266,13 @@ export class GridDualStrategy {
 
     // === STOP HIT ===
     if (order.type === "MARKET") {
-      if (isLongFill && this.long.active && this.pos.long) {
+      if (isLongFill && this.long.active) {
         this.long.closed = true;
         this.long.active = false;
         console.log("❌ LONG stopped out");
         await this.moveOppositeToBreakeven("LONG");
       }
-      if (isShortFill && this.short.active && this.pos.short) {
+      if (isShortFill && this.short.active) {
         this.short.closed = true;
         this.short.active = false;
         console.log("❌ SHORT stopped out");

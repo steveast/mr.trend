@@ -12,6 +12,7 @@ export class MrTrendBot {
   private notifier: TelegramNotifier;
   private entryTriggered = false;
   private cycleActive = false;
+  private needRestart = false;
   private testnet = false;
   private readonly symbol = "BTCUSDT";
 
@@ -40,13 +41,14 @@ export class MrTrendBot {
     try {
       // === MARK PRICE UPDATE ===
       this.userStream.on("price", (price: number) => {
-        if (!this.entryTriggered && !this.cycleActive) {
+        if ((!this.entryTriggered && !this.cycleActive) || this.needRestart) {
           const p = roundToFixed(price, 2);
           this.entryTriggered = true;
           this.cycleActive = true;
+          this.needRestart = false;
           this.strategy
             .start(p, () => {
-              this.resetEntryState();
+              this.needRestart = true;
             })
             .then(status => {
               console.log(status);
