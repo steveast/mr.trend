@@ -42,6 +42,7 @@ export class MrTrendBot {
     try {
       // === MARK PRICE UPDATE ===
       this.userStream.on("price", (price: number) => {
+        console.log(this.entryTriggered, this.cycleActive, this.needRestart, price);
         if ((!this.entryTriggered && !this.cycleActive) || this.needRestart) {
           console.log(price);
           const p = roundToFixed(price, 2);
