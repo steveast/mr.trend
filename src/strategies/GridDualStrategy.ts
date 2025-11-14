@@ -12,7 +12,7 @@ interface Position {
   positionSide: "LONG" | "SHORT";
   positionAmt: number;
   active: boolean;
-  takeProfitTriggered: boolean;
+  takeProfitTriggered: number;
   closed: boolean;
   stopOrderId?: string;
 }
@@ -54,9 +54,9 @@ export class GridDualStrategy {
         side: "LONG",
         positionSide: "LONG",
         positionAmt: long.positionAmt || 0,
-        active: true,
-        takeProfitTriggered: false,
-        closed: false,
+        active: this.long?.active ?? true,
+        takeProfitTriggered: this.long?.takeProfitTriggered ?? 0,
+        closed: this.long?.closed ?? false,
         stopOrderId: undefined,
       };
     }
@@ -76,9 +76,9 @@ export class GridDualStrategy {
         side: "SHORT",
         positionSide: "SHORT",
         positionAmt: short.positionAmt || 0,
-        active: true,
-        takeProfitTriggered: false,
-        closed: false,
+        active: this.short?.active ?? true,
+        takeProfitTriggered: this.short?.takeProfitTriggered ?? 0,
+        closed: this.short?.closed ?? false,
         stopOrderId: undefined,
       };
     }
@@ -111,7 +111,7 @@ export class GridDualStrategy {
     await new Promise(res => setTimeout(res, 300));
     await this.placeInitialOrders(qtyPerGrid);
 
-    return "Session started!";
+    return "New cycle started!";
   }
 
   private async openPositions(entryPrice: number) {
@@ -274,14 +274,18 @@ export class GridDualStrategy {
 
     // === FIRST TP HIT → MOVE STOP TO BREAKEVEN ===
     if (order.type === "LIMIT" && !this.long?.takeProfitTriggered && isLongFill) {
-      this.long!.takeProfitTriggered = true;
-      console.log("✅ LONG first TP hit → moving stop to BE");
-      await this.moveStopToBreakeven("LONG");
+      this.long!.takeProfitTriggered += 1;
+      if (this.long!.takeProfitTriggered === 1) {
+        console.log("✅ LONG first TP hit → moving stop to BE");
+        await this.moveStopToBreakeven("LONG");
+      }
     }
     if (order.type === "LIMIT" && !this.short?.takeProfitTriggered && isShortFill) {
-      this.short!.takeProfitTriggered = true;
-      console.log("✅ SHORT first TP hit → moving stop to BE");
-      await this.moveStopToBreakeven("SHORT");
+      this.short!.takeProfitTriggered += 1;
+      if (this.short!.takeProfitTriggered === 1) {
+        console.log("✅ SHORT first TP hit → moving stop to BE");
+        await this.moveStopToBreakeven("SHORT");
+      }
     }
 
     // === CYCLE COMPLETE ===
