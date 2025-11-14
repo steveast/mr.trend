@@ -36,7 +36,7 @@ export class MrTrendBot {
   }
 
   async start() {
-    console.log('start')
+    console.log('start 1')
     this.notifier.botStarted(this.testnet);
 
     try {
