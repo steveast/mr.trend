@@ -273,14 +273,14 @@ export class GridDualStrategy {
     }
 
     // === FIRST TP HIT → MOVE STOP TO BREAKEVEN ===
-    if (order.type === "LIMIT" && !this.long?.takeProfitTriggered && isLongFill) {
+    if (order.type === "LIMIT" && isLongFill) {
       this.long!.takeProfitTriggered += 1;
       if (this.long!.takeProfitTriggered === 1) {
         console.log("✅ LONG first TP hit → moving stop to BE");
         await this.moveStopToBreakeven("LONG");
       }
     }
-    if (order.type === "LIMIT" && !this.short?.takeProfitTriggered && isShortFill) {
+    if (order.type === "LIMIT" && isShortFill) {
       this.short!.takeProfitTriggered += 1;
       if (this.short!.takeProfitTriggered === 1) {
         console.log("✅ SHORT first TP hit → moving stop to BE");
