@@ -290,6 +290,8 @@ export class GridDualStrategy {
       }
     }
 
+    console.log('this.long', this.long);
+    console.log('this.short', this.short);
     // === CYCLE COMPLETE ===
     if ((!this.long || this.long?.closed) && (!this.short || this.short?.closed)) {
       console.log('🎉 Both sides closed. Cycle complete.');
