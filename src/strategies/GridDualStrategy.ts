@@ -6,6 +6,7 @@ import { roundToFixed } from "../utils/roundToFixed";
 interface Position {
   entry: number;
   stop: number;
+  stopOpposite: number;
   takeProfits: number[];
   side: "LONG" | "SHORT";
   positionSide: "LONG" | "SHORT";
@@ -42,10 +43,13 @@ export class GridDualStrategy {
       const entry = long.entryPrice || entryPrice;
       const stopDistance = entry * this.range;
       const tpStep = stopDistance / this.gridCount;
+      const stopLong = roundToFixed(entry - stopDistance, 2);
+      const stopShort = roundToFixed(entry + stopDistance, 2);
 
       this.long = {
         entry,
-        stop: roundToFixed(entry - stopDistance, 2),
+        stop: stopLong,
+        stopOpposite: stopShort,
         takeProfits: Array.from({ length: this.gridCount }, (_, i) => roundToFixed(entry + stopDistance + tpStep * (i + 1), 2)),
         side: "LONG",
         positionSide: "LONG",
@@ -61,10 +65,13 @@ export class GridDualStrategy {
       const entry = short.entryPrice || entryPrice;
       const stopDistance = entry * this.range;
       const tpStep = stopDistance / this.gridCount;
+      const stopLong = roundToFixed(entry - stopDistance, 2);
+      const stopShort = roundToFixed(entry + stopDistance, 2);
 
       this.short = {
         entry,
-        stop: roundToFixed(entry + stopDistance, 2),
+        stop: stopShort,
+        stopOpposite: stopLong,
         takeProfits: Array.from({ length: this.gridCount }, (_, i) => roundToFixed(entry - stopDistance - tpStep * (i + 1), 2)),
         side: "SHORT",
         positionSide: "SHORT",
@@ -311,10 +318,9 @@ export class GridDualStrategy {
 
   private async moveStopToBreakeven(side: "LONG" | "SHORT") {
     const position = side === "LONG" ? this.long : this.short;
-    const opposite = side === "LONG" ? this.short : this.long;
-    if (!position || !position.active || !position.stopOrderId || !opposite) return;
+    if (!position || !position.active || !position.stopOrderId) return;
 
-    const newStop = opposite.stop;
+    const newStop = position.stopOpposite;
     console.log(`🔄 Moving ${side} stop to breakeven: ${newStop}`);
 
     try {
