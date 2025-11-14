@@ -39,7 +39,7 @@ export class GridDualStrategy {
     this.onCycleComplete = callback;
   }
 
-  async start(entryPrice: number): Promise<any> {
+  async start(entryPrice: number, restart: VoidFunction): Promise<any> {
     Object.assign(this.pos, await this.orderManager.getPosition());
 
     // Cancel all if no position
@@ -51,7 +51,8 @@ export class GridDualStrategy {
     if (this.pos.long || this.pos.short) {
       console.log("Position exists, waiting 1 minute...");
       await new Promise(r => setTimeout(r, 60000));
-      return this.start(entryPrice);
+      restart();
+      return "Restart cycle!";
     }
 
     await this.orderManager.ensureHedgeMode();

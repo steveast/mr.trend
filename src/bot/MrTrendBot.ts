@@ -40,10 +40,17 @@ export class MrTrendBot {
           console.log(`New cycle triggered at mark price: ${p}`);
           this.entryTriggered = true;
           this.cycleActive = true;
-          this.strategy.start(p).catch(err => {
-            console.error("Strategy start failed:", err);
-            this.resetEntryState();
-          });
+          this.strategy
+            .start(p, () => {
+              this.resetEntryState();
+            })
+            .then(status => {
+              console.log(status);
+            })
+            .catch(err => {
+              console.error("Strategy start failed:", err);
+              this.resetEntryState();
+            });
         }
       });
 
