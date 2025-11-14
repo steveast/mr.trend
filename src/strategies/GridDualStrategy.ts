@@ -57,7 +57,7 @@ export class GridDualStrategy {
         active: this.long?.active ?? true,
         takeProfitTriggered: this.long?.takeProfitTriggered ?? 0,
         closed: this.long?.closed ?? false,
-        stopOrderId: undefined,
+        stopOrderId: this.long?.stopOrderId,
       };
     }
 
@@ -79,7 +79,7 @@ export class GridDualStrategy {
         active: this.short?.active ?? true,
         takeProfitTriggered: this.short?.takeProfitTriggered ?? 0,
         closed: this.short?.closed ?? false,
-        stopOrderId: undefined,
+        stopOrderId: this.short?.stopOrderId,
       };
     }
   }
@@ -300,13 +300,15 @@ export class GridDualStrategy {
 
   private async moveOppositeToBreakeven(closedSide: 'LONG' | 'SHORT') {
     const opposite = closedSide === 'LONG' ? this.short : this.long;
-    if (!opposite || !opposite.active || !opposite.stopOrderId) return;
+    if (!opposite || !opposite.active) return;
 
     const newStop = opposite.entry;
     console.log(`🔄 Moving ${opposite.side} stop to breakeven: ${newStop}`);
 
     try {
-      await this.orderManager.cancelOrder(this.symbol, opposite.stopOrderId!);
+      if (opposite.stopOrderId) {
+        await this.orderManager.cancelOrder(this.symbol, opposite.stopOrderId!);
+      }
 
       const result = await this.orderManager.placeOrder({
         symbol: this.symbol,
@@ -325,13 +327,15 @@ export class GridDualStrategy {
   private async moveStopToBreakeven(side: 'LONG' | 'SHORT') {
     const position = side === 'LONG' ? this.long : this.short;
     console.log('The postion', position);
-    if (!position || !position.active || !position.stopOrderId) return;
+    if (!position || !position.active) return;
 
     const newStop = position.stopOpposite;
     console.log(`🔄 Moving ${side} stop to breakeven: ${newStop}`);
 
     try {
-      await this.orderManager.cancelOrder(this.symbol, position.stopOrderId!);
+      if (position.stopOrderId) {
+        await this.orderManager.cancelOrder(this.symbol, position.stopOrderId!);
+      }
 
       const result = await this.orderManager.placeOrder({
         symbol: this.symbol,
