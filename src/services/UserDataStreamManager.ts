@@ -38,7 +38,6 @@ export class UserDataStreamManager extends EventEmitter {
 
     // Обработка всех сообщений
     this.ws.on("formattedMessage", (data: any) => {
-      console.log(data);
       // === MARK PRICE UPDATE ===
       if (data.eventType === "markPriceUpdate") {
         const markPrice = parseFloat(data.markPrice);

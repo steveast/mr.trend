@@ -78,10 +78,7 @@ export class GridDualStrategy {
   }
 
   async start(entryPrice: number, restart: VoidFunction): Promise<any> {
-    console.log('started')
     await this.fillPositions(entryPrice);
-
-    console.log('long', this.long);
 
     // Cancel all if no position
     if (!this.long && !this.short) {
