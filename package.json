@@ -24,6 +24,7 @@
   "homepage": "https://github.com/steveast/mr.trend#readme",
   "dependencies": {
     "binance": "^3.1.2",
+    "cross-fetch": "^4.1.0",
     "dotenv": "^17.2.3",
     "events": "^3.3.0"
   },

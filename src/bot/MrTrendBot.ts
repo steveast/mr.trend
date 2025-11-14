@@ -1,5 +1,6 @@
 import { BinanceClient } from "../services/BinanceClient";
 import { OrderManager } from "../services/OrderManager";
+import { TelegramNotifier } from "../services/TelegramNotifier";
 import { UserDataStreamManager } from "../services/UserDataStreamManager";
 import { GridDualStrategy } from "../strategies/GridDualStrategy";
 import { roundToFixed } from "../utils/roundToFixed";
@@ -8,16 +9,20 @@ export class MrTrendBot {
   private userStream: UserDataStreamManager;
   private orderManager: OrderManager;
   private strategy: GridDualStrategy;
+  private notifier: TelegramNotifier;
   private entryTriggered = false;
   private cycleActive = false;
+  private testnet = false;
   private readonly symbol = "BTCUSDT";
 
   constructor(testnet = true) {
     const binance = new BinanceClient(testnet);
     const client = binance.getClient();
+    this.testnet = testnet;
 
     this.orderManager = new OrderManager(client);
     this.strategy = new GridDualStrategy(this.orderManager);
+    this.notifier = new TelegramNotifier();
 
     // Передаём USDMClient и testnet
     this.userStream = new UserDataStreamManager(client, testnet);
@@ -25,19 +30,18 @@ export class MrTrendBot {
     this.strategy.setOnCycleComplete(() => {
       this.cycleActive = false;
       this.entryTriggered = false;
-      console.log("Cycle completed. Ready for new entry...");
+      this.notifier.cycleCompleted();
     });
   }
 
   async start() {
-    console.log("MrTrend Bot Starting...");
+    this.notifier.botStarted(this.testnet);
 
     try {
       // === MARK PRICE UPDATE ===
       this.userStream.on("price", (price: number) => {
         if (!this.entryTriggered && !this.cycleActive) {
           const p = roundToFixed(price, 2);
-          console.log(`New cycle triggered at mark price: ${p}`);
           this.entryTriggered = true;
           this.cycleActive = true;
           this.strategy
@@ -49,6 +53,7 @@ export class MrTrendBot {
             })
             .catch(err => {
               console.error("Strategy start failed:", err);
+              this.notifier.error(`Strategy start failed: ${err.message}`);
               this.resetEntryState();
             });
         }
@@ -59,8 +64,10 @@ export class MrTrendBot {
         if (!this.cycleActive) return;
         try {
           await this.strategy.handleOrderFilled(order);
+          this.notifier.orderFilled(order);
         } catch (err: any) {
           console.error("Error handling order fill:", err.message);
+          this.notifier.error(`Order fill error: ${err.message}`);
         }
       });
 
@@ -69,6 +76,7 @@ export class MrTrendBot {
       console.log(`Subscribed to ${this.symbol} mark price and user data stream`);
     } catch (error: any) {
       console.error("Failed to start bot:", error.message);
+      this.notifier.error(`Bot start failed: ${error.message}`);
       throw error;
     }
   }
