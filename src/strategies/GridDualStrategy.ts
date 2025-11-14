@@ -80,6 +80,8 @@ export class GridDualStrategy {
   async start(entryPrice: number, restart: VoidFunction): Promise<any> {
     await this.fillPositions(entryPrice);
 
+    console.log('long', this.long);
+
     // Cancel all if no position
     if (!this.long && !this.short) {
       await this.orderManager.cancelAll(this.symbol);
@@ -113,7 +115,7 @@ export class GridDualStrategy {
     console.log(`Opening LONG: $${this.notionalPerSide} → ${qty} BTC`);
     console.log(`Opening SHORT: $${this.notionalPerSide} → ${qty} BTC`);
 
-    const positions = await Promise.all([
+    await Promise.all([
       this.orderManager.placeOrder({
         symbol: this.symbol,
         side: "BUY",
