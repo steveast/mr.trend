@@ -150,15 +150,13 @@ export class GridDualStrategy {
 
     // === STOP ORDERS (полная позиция) ===
     if (this.long) {
-      console.log('STOP LONG');
-      console.log(this.long!.positionAmt);
-      console.log(roundToFixed(this.long!.positionAmt * 1.2, 2));
       orders.push(async () => {
         const result = await this.orderManager.placeOrder({
+          closePosition: 'true',
           symbol: this.symbol,
           side: 'SELL',
           type: 'STOP_MARKET',
-          quantity: roundToFixed(this.long!.positionAmt * 1.2, 2),
+          quantity: this.long!.positionAmt,
           positionSide: 'LONG',
           stopPrice: this.long!.stop,
         });
@@ -170,10 +168,11 @@ export class GridDualStrategy {
     if (this.short) {
       orders.push(async () => {
         const result = await this.orderManager.placeOrder({
+          closePosition: 'true',
           symbol: this.symbol,
           side: 'BUY',
           type: 'STOP_MARKET',
-          quantity: roundToFixed(this.short!.positionAmt * 1.2, 2),
+          quantity: this.short!.positionAmt,
           positionSide: 'SHORT',
           stopPrice: this.short!.stop,
         });
@@ -189,6 +188,7 @@ export class GridDualStrategy {
       // LONG TP
       orders.push(() =>
         this.orderManager.placeOrder({
+          closePosition: isLast ? 'true' : undefined,
           symbol: this.symbol,
           side: 'SELL',
           type: isLast ? 'TAKE_PROFIT_MARKET' : 'LIMIT',
@@ -203,6 +203,7 @@ export class GridDualStrategy {
       // SHORT TP
       orders.push(() =>
         this.orderManager.placeOrder({
+          closePosition: isLast ? 'true' : undefined,
           symbol: this.symbol,
           side: 'BUY',
           type: isLast ? 'TAKE_PROFIT_MARKET' : 'LIMIT',
