@@ -65,7 +65,7 @@ export class MrTrendBot {
 
       // === ORDER FILLED ===
       this.userStream.on('orderFilled', async (order: any) => {
-        if (!this.cycleActive) return;
+        if (!this.cycleActive || order.symbol !== 'BTCUSDT') return;
         try {
           await this.strategy.handleOrderFilled(order);
           this.notifier.orderFilled(order);
