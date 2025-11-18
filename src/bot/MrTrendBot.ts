@@ -15,6 +15,7 @@ export class MrTrendBot {
   private needRestart = false;
   private testnet = false;
   private readonly symbol = 'BTCUSDT';
+  private PnL: number = 0;
 
   constructor(testnet = true) {
     const binance = new BinanceClient(testnet);
@@ -31,7 +32,8 @@ export class MrTrendBot {
     this.strategy.setOnCycleComplete(() => {
       this.cycleActive = false;
       this.entryTriggered = false;
-      this.notifier.cycleCompleted();
+      this.notifier.cycleCompleted(this.PnL);
+      this.PnL = 0;
     });
   }
 
@@ -67,6 +69,9 @@ export class MrTrendBot {
         try {
           await this.strategy.handleOrderFilled(order);
           this.notifier.orderFilled(order);
+          if (order.type === 'LIMIT') {
+            this.PnL += parseFloat(order.realisedProfit);
+          }
         } catch (err: any) {
           console.error('Error handling order fill:', err.message);
           this.notifier.error(`Order fill error: ${err.message}`);

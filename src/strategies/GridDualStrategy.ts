@@ -150,12 +150,15 @@ export class GridDualStrategy {
 
     // === STOP ORDERS (полная позиция) ===
     if (this.long) {
+      console.log('STOP LONG');
+      console.log(this.long!.positionAmt);
+      console.log(roundToFixed(this.long!.positionAmt * 1.2, 2));
       orders.push(async () => {
         const result = await this.orderManager.placeOrder({
           symbol: this.symbol,
           side: 'SELL',
           type: 'STOP_MARKET',
-          quantity: this.long!.positionAmt,
+          quantity: roundToFixed(this.long!.positionAmt * 1.2, 2),
           positionSide: 'LONG',
           stopPrice: this.long!.stop,
         });
@@ -170,7 +173,7 @@ export class GridDualStrategy {
           symbol: this.symbol,
           side: 'BUY',
           type: 'STOP_MARKET',
-          quantity: Math.abs(this.short!.positionAmt),
+          quantity: roundToFixed(this.short!.positionAmt * 1.2, 2),
           positionSide: 'SHORT',
           stopPrice: this.short!.stop,
         });

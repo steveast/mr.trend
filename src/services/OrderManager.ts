@@ -37,6 +37,7 @@ export class OrderManager {
           stopPrice: params.stopPrice ? roundToFixed(params.stopPrice, 1) : undefined,
           timeInForce: params.timeInForce,
           closePosition: params.closePosition,
+          reduceOnly: params.reduceOnly,
         } as any).filter(([_, v]) => v !== undefined)
       );
 

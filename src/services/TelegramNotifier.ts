@@ -1,5 +1,6 @@
 // src/services/TelegramNotifier.ts
 import fetch from 'cross-fetch';
+import { roundToFixed } from '../utils/roundToFixed';
 
 export class TelegramNotifier {
   private readonly token: string;
@@ -69,10 +70,10 @@ export class TelegramNotifier {
     this.send(msg);
   }
 
-  cycleCompleted() {
+  cycleCompleted(PnL: number) {
     const msg = `
 <b>Цикл завершён</b>
-<b>Итог P&L:</b> TODO
+<b>Итог P&L:</b> ${roundToFixed(PnL, 2)}
 <b>Готов к новому входу...</b>
     `.trim();
 
