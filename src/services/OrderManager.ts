@@ -1,4 +1,4 @@
-import { FuturesPositionV3, NewFuturesOrderParams, USDMClient } from 'binance';
+import { FuturesPositionV3, NewFuturesOrderParams, OrderResult, USDMClient } from 'binance';
 import { roundToFixed } from '../utils/roundToFixed';
 
 export interface OrderParams {
@@ -10,6 +10,15 @@ export interface OrderParams {
   positionSide?: 'SHORT' | 'LONG';
   stopPrice?: number;
   timeInForce?: 'GTC' | 'IOC' | 'FOK';
+}
+
+interface StopOrder {
+  orderId: string;
+  side: 'BUY' | 'SELL'; // BUY = стоп для LONG, SELL = стоп для SHORT
+  positionSide: 'LONG' | 'SHORT';
+  stopPrice: number;
+  origQty: number;
+  time: number;
 }
 
 export interface IPosition {
@@ -143,6 +152,49 @@ export class OrderManager {
         console.error('Margin type error:', error.body?.msg || error.message);
         throw error;
       }
+    }
+  }
+
+  /**
+   * Получает все активные STOP_MARKET и TAKE_PROFIT_MARKET ордера
+   */
+  async getStopMarketOrders(): Promise<{
+    long: StopOrder | null;
+    short: StopOrder | null;
+  }> {
+    try {
+      const openOrders: any[] = await this.client.getAllOpenOrders({
+        symbol: this.symbol,
+      });
+      const stopOrders: OrderResult[] = openOrders.filter((o: any) => o.type === 'STOP_MARKET');
+      let longStop: StopOrder | null = null;
+      let shortStop: StopOrder | null = null;
+
+      for (const o of stopOrders) {
+        const mapped: StopOrder = {
+          orderId: String(o.orderId),
+          side: o.side as 'BUY' | 'SELL',
+          positionSide: o.positionSide as 'LONG' | 'SHORT',
+          stopPrice: Number(o.stopPrice),
+          origQty: Number(o.origQty),
+          time: o.time as number,
+        };
+
+        if (o.positionSide === 'LONG') {
+          if (!longStop || mapped.time > longStop.time) {
+            longStop = mapped;
+          }
+        } else if (o.positionSide === 'SHORT') {
+          if (!shortStop || mapped.time > shortStop.time) {
+            shortStop = mapped;
+          }
+        }
+      }
+
+      return { long: longStop, short: shortStop };
+    } catch (error: any) {
+      console.error('Ошибка getStopMarketOrders:', error.body?.msg || error.message);
+      throw error;
     }
   }
 }

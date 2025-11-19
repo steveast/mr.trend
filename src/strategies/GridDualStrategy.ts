@@ -38,6 +38,7 @@ export class GridDualStrategy {
 
   async fillPositions(entryPrice: number) {
     const { long, short } = await this.orderManager.getPosition();
+    const stop = await this.orderManager.getStopMarketOrders();
 
     if (long) {
       const entry = long.entryPrice || entryPrice;
@@ -57,7 +58,7 @@ export class GridDualStrategy {
         active: this.long?.active ?? true,
         takeProfitTriggered: this.long?.takeProfitTriggered ?? 0,
         closed: this.long?.closed ?? false,
-        stopOrderId: this.long?.stopOrderId,
+        stopOrderId: this.long?.stopOrderId || stop.long?.orderId,
       };
     }
 
@@ -79,7 +80,7 @@ export class GridDualStrategy {
         active: this.short?.active ?? true,
         takeProfitTriggered: this.short?.takeProfitTriggered ?? 0,
         closed: this.short?.closed ?? false,
-        stopOrderId: this.short?.stopOrderId,
+        stopOrderId: this.short?.stopOrderId || stop.short?.orderId,
       };
     }
   }
@@ -94,7 +95,7 @@ export class GridDualStrategy {
 
     // Wait if position exists
     if (this.long || this.short) {
-      console.log('POSITIONS!', this.long, this.short);
+      // console.log('POSITIONS!', this.long, this.short);
       await new Promise(r => setTimeout(r, 60000));
       restart();
       return 'Waiting for the end of the cycle!';
