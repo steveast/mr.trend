@@ -94,6 +94,7 @@ export class GridDualStrategy {
 
     // Wait if position exists
     if (this.long || this.short) {
+      console.log('POSITIONS!', this.long, this.short);
       await new Promise(r => setTimeout(r, 60000));
       restart();
       return 'Waiting for the end of the cycle!';
@@ -317,6 +318,7 @@ export class GridDualStrategy {
       }
 
       const result = await this.orderManager.placeOrder({
+        closePosition: 'true',
         symbol: this.symbol,
         side: closedSide === 'LONG' ? 'BUY' : 'SELL',
         type: 'STOP_MARKET',
@@ -344,6 +346,7 @@ export class GridDualStrategy {
       }
 
       const result = await this.orderManager.placeOrder({
+        closePosition: 'true',
         symbol: this.symbol,
         side: side === 'LONG' ? 'SELL' : 'BUY',
         type: 'STOP_MARKET',
