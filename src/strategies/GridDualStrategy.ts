@@ -20,7 +20,7 @@ interface Position {
 export class GridDualStrategy {
   private long: Position | null = null;
   private short: Position | null = null;
-  private symbol = 'BTCUSDT';
+  private symbol = process.env.SYMBOL;
 
   // === CONFIG: NOTIONAL IN USDT ===
   private notionalPerSide = 20 * 50; // 20 usd per position
@@ -223,7 +223,7 @@ export class GridDualStrategy {
 
     /* setTimeout(() => {
       this.handleOrderFilled({
-        symbol: "BTCUSDT",
+        symbol: process.env.SYMBOL,
         side: "BUY",
         type: "MARKET",
         price: 104087.8,
@@ -240,7 +240,7 @@ export class GridDualStrategy {
     }, 5000);
     setTimeout(() => {
       this.handleOrderFilled({
-        symbol: "BTCUSDT",
+        symbol: process.env.SYMBOL,
         side: "SELL",
         type: "LIMIT",
         price: 103864.3,

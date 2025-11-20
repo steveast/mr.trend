@@ -48,7 +48,7 @@ export class TelegramNotifier {
     const msg = `
 <b>Mr. Trend Bot Запущен</b>
 <b>Сеть:</b> ${testnet ? 'TESTNET' : 'MAINNET'}
-<b>Символ:</b> BTCUSDT
+<b>Символ:</b> ${process.env.SYMBOL}
 <b>Время:</b> ${new Date().toLocaleString('ru')}
     `.trim();
 

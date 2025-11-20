@@ -29,7 +29,7 @@ export interface IPosition {
 }
 
 export class OrderManager {
-  private symbol = 'BTCUSDT';
+  private symbol = process.env.SYMBOL;
 
   constructor(public client: USDMClient) {}
 

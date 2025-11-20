@@ -14,7 +14,7 @@ export class MrTrendBot {
   private cycleActive = false;
   private needRestart = false;
   private testnet = false;
-  private readonly symbol = 'BTCUSDT';
+  private readonly symbol = process.env.SYMBOL;
   private PnL: number = 0;
 
   constructor(testnet = true) {
@@ -65,7 +65,7 @@ export class MrTrendBot {
 
       // === ORDER FILLED ===
       this.userStream.on('orderFilled', async (order: any) => {
-        if (!this.cycleActive || order.symbol !== 'BTCUSDT') return;
+        if (!this.cycleActive || order.symbol !== process.env.SYMBOL) return;
         try {
           await this.strategy.handleOrderFilled(order);
           this.notifier.orderFilled(order);

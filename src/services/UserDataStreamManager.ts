@@ -79,7 +79,7 @@ export class UserDataStreamManager extends EventEmitter {
   /**
    * Запуск: подписка на mark price + user data stream
    */
-  async start(symbol: string = 'BTCUSDT') {
+  async start(symbol: string = process.env.SYMBOL!) {
     try {
       // 1. Подписка на mark price
       this.ws.subscribeMarkPrice(symbol, 'usdm', 1000);
