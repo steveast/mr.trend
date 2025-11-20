@@ -14,7 +14,7 @@ export class MrTrendBot {
   private cycleActive = false;
   private needRestart = false;
   private testnet = false;
-  private readonly symbol = process.env.SYMBOL;
+  private readonly symbol = process.env.SYMBOL!;
   private PnL: number = 0;
 
   constructor(testnet = true) {

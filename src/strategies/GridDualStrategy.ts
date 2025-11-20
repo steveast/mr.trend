@@ -20,13 +20,13 @@ interface Position {
 export class GridDualStrategy {
   private long: Position | null = null;
   private short: Position | null = null;
-  private symbol = process.env.SYMBOL;
+  private symbol = process.env.SYMBOL!;
 
   // === CONFIG: NOTIONAL IN USDT ===
   private notionalPerSide = 20 * 50; // 20 usd per position
   private range = 0.02;
   private gridCount = 10;
-  private leverage = 20;
+  private leverage = 30;
 
   private onCycleComplete?: () => void;
 
