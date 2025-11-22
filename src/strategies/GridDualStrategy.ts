@@ -26,7 +26,7 @@ export class GridDualStrategy {
   private notionalPerSide = 20 * 50; // 20 usd per position
   private range = 0.02;
   private gridCount = 10;
-  private leverage = 30;
+  private leverage = 20;
 
   private onCycleComplete?: () => void;
 
