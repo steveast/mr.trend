@@ -23,13 +23,14 @@ export class MrTrendBot {
     this.testnet = testnet;
 
     this.orderManager = new OrderManager(client);
-    this.strategy = new GridDualStrategy(this.orderManager);
     this.notifier = new TelegramNotifier();
+    this.strategy = new GridDualStrategy(this.orderManager, this.notifier);
 
     // Передаём USDMClient и testnet
     this.userStream = new UserDataStreamManager(client, testnet);
 
     this.strategy.setOnCycleComplete(() => {
+      if (!this.cycleActive) return;
       this.cycleActive = false;
       this.entryTriggered = false;
       this.notifier.cycleCompleted(this.PnL);
@@ -53,7 +54,7 @@ export class MrTrendBot {
               this.needRestart = true;
             })
             .then(status => {
-              console.log(status);
+              status && console.log(status);
             })
             .catch(err => {
               console.error('Strategy start failed:', err);
@@ -71,6 +72,10 @@ export class MrTrendBot {
           this.notifier.orderFilled(order);
           if (order.type === 'LIMIT') {
             this.PnL += parseFloat(order.realisedProfit);
+          }
+          if (order.type === 'TAKE_PROFIT_MARKET') {
+            this.PnL += parseFloat(order.realisedProfit);
+            this.notifier.up(`Full success! PnL is ${this.PnL}`);
           }
         } catch (err: any) {
           console.error('Error handling order fill:', err.message);

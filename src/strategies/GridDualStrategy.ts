@@ -1,6 +1,7 @@
 // src/strategies/GridDualStrategy.ts
 
 import { IPosition, OrderManager } from '../services/OrderManager';
+import { TelegramNotifier } from '../services/TelegramNotifier';
 import { roundToFixed } from '../utils/roundToFixed';
 
 interface Position {
@@ -22,6 +23,8 @@ export class GridDualStrategy {
   private short: Position | null = null;
   private symbol = process.env.SYMBOL!;
 
+  private notifier: TelegramNotifier;
+
   // === CONFIG: NOTIONAL IN USDT ===
   private notionalPerSide = 20 * 50; // 20 usd per position
   private range = 0.02;
@@ -30,7 +33,12 @@ export class GridDualStrategy {
 
   private onCycleComplete?: () => void;
 
-  constructor(private orderManager: OrderManager) {}
+  constructor(
+    private orderManager: OrderManager,
+    notifier: TelegramNotifier
+  ) {
+    this.notifier = notifier;
+  }
 
   setOnCycleComplete(callback: () => void) {
     this.onCycleComplete = callback;
@@ -98,7 +106,7 @@ export class GridDualStrategy {
       // console.log('POSITIONS!', this.long, this.short);
       await new Promise(r => setTimeout(r, 60000));
       restart();
-      return 'Waiting for the end of the cycle!';
+      return;
     }
 
     const qtyPerGrid = roundToFixed(this.notionalPerSide / this.gridCount / entryPrice, 6);
@@ -143,14 +151,9 @@ export class GridDualStrategy {
 
   private async placeInitialOrders(qtyPerGrid: number) {
     if (!this.long || !this.short) return;
-
     const orders: (() => Promise<any>)[] = [];
+    const tpQty = roundToFixed(qtyPerGrid, 6);
 
-    // УБРАЛИ УМНОЖЕНИЕ НА LEVERAGE
-    const tpQty = roundToFixed(qtyPerGrid, 6); // 0.000098 ≈ 0.0001 BTC
-    console.log(`TP grid size: ${tpQty} BTC (per grid, no leverage multiplier)`);
-
-    // === STOP ORDERS (полная позиция) ===
     if (this.long) {
       orders.push(async () => {
         const result = await this.orderManager.placeOrder({
@@ -296,8 +299,6 @@ export class GridDualStrategy {
       }
     }
 
-    console.log('this.long', this.long);
-    console.log('this.short', this.short);
     // === CYCLE COMPLETE ===
     if ((!this.long || this.long?.closed) && (!this.short || this.short?.closed)) {
       console.log('🎉 Both sides closed. Cycle complete.');
@@ -328,6 +329,7 @@ export class GridDualStrategy {
         positionSide: opposite.positionSide,
       });
       opposite.stopOrderId = result.orderId?.toString();
+      this.notifier.up(`✅ Primary STOP set successfully!`, 'STOP');
     } catch (error) {
       console.warn(`⚠️ Change stop to BE failed ${opposite.side}`);
     }
@@ -335,7 +337,6 @@ export class GridDualStrategy {
 
   private async moveStopToBreakeven(side: 'LONG' | 'SHORT') {
     const position = side === 'LONG' ? this.long : this.short;
-    console.log('The postion', position);
     if (!position || !position.active) return;
 
     const newStop = position.stopOpposite;
@@ -356,6 +357,7 @@ export class GridDualStrategy {
         positionSide: side,
       });
       position.stopOrderId = result.orderId?.toString();
+      this.notifier.up(`✅ Secondary STOP set successfully!`, 'STOP');
     } catch (error) {
       console.warn(`⚠️ Change stop to TP failed, using cancel+place for ${side}`);
     }

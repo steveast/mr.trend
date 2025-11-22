@@ -59,8 +59,7 @@ export class TelegramNotifier {
     const profit = order.realisedProfit >= 0 ? '' : '';
     const msg = `
 <b>Ордер исполнен</b>
-<b>Сторона:</b> ${order.side}
-<b>Тип:</b> ${order.type}
+<b>Сторона:</b> ${order.side}/${order.type}
 <b>Цена:</b> $${order.price.toFixed(2)}
 <b>Кол-во:</b> ${order.qty}
 <b>P&L:</b> ${profit}$${Math.abs(order.realisedProfit).toFixed(4)}
@@ -87,5 +86,11 @@ ${message}
     `.trim();
 
     this.send(msg);
+  }
+
+  async up(text: string, code?: string) {
+    const message = `${code ? `\x1b[36m[${code}]\x1b[0m` : ''} ${text}`;
+    console.log(message);
+    return await this.send(message);
   }
 }
